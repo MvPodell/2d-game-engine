@@ -8,7 +8,7 @@ const W: f32 = 768.0;
 const H: f32 = 1280.0;
 const GUY_SPEED: f32 = 4.0;
 const SPRITE_MAX: usize = 16;
-const CATCH_DISTANCE: f32 = 16.0;
+const CATCH_DISTANCE: f32 = 32.0;
 const COLLISION_STEPS: usize = 3;
 struct Guy {
     pos: Vec2,
@@ -33,6 +33,7 @@ struct Game {
     cars: Vec<Car>,
     car_timer: u32,
     coins: Vec<Coin>, 
+    pavements: Vec<AABB>,
     coin_timer: u32,
     score: u32,
     font: engine::BitFont,
@@ -51,14 +52,14 @@ impl engine::Game for Game {
         };
         #[cfg(target_arch = "wasm32")]
         let sprite_img = {
-            let img_bytes = include_bytes!("../content/spritesheet.png");
+            let img_bytes = include_bytes!("../content/spritesheet2.png");
             image::load_from_memory_with_format(&img_bytes, image::ImageFormat::Png)
                 .map_err(|e| e.to_string())
                 .unwrap()
                 .into_rgba8()
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let sprite_img = image::open("../content/spritesheet.png").unwrap().into_rgba8();
+        let sprite_img = image::open("../content/spritesheet2.png").unwrap().into_rgba8();
         let sprite_tex = engine.renderer.gpu.create_texture(
             &sprite_img,
             wgpu::TextureFormat::Rgba8UnormSrgb,
@@ -97,6 +98,21 @@ impl engine::Game for Game {
             size: Vec2 { x: 288.0, y: H },
         };
 
+        let left_pavement = AABB {
+            center: Vec2 {
+                x: 8.0,
+                y: H / 2.0,
+            },
+            size: Vec2 { x: 288.0, y: H },
+        };
+        let right_pavement = AABB {
+            center: Vec2 {
+                x: W-8.0,
+                y: H / 2.0,
+            },
+            size: Vec2 { x: 288.0, y: H },
+        };
+
         let font = engine::BitFont::with_sheet_region(
             '0'..='9',
             SheetRegion::new(0, 0, 512, 0, 80, 8),
@@ -106,6 +122,7 @@ impl engine::Game for Game {
             camera,
             guy,
             walls: vec![left_wall, right_wall, floor],
+            pavements: vec![left_pavement, right_pavement],
             cars: Vec::with_capacity(16),
             car_timer: 0,
             coins: Vec::with_capacity(16),
@@ -240,6 +257,7 @@ impl engine::Game for Game {
         let random_index = rng.sample(uniform);
         let random_value = possible_values[random_index];
 
+        // spawn new cars
         if self.car_timer > 0 {
             self.car_timer -= 1;
         } else if self.cars.len() < 8 {
@@ -263,11 +281,17 @@ impl engine::Game for Game {
             .iter()
             .position(|car| car.pos.distance(self.guy.pos) <= CATCH_DISTANCE)
         {
+            println!("Score: {}", self.score);
             self.game_over = true;
-            // self.cars.swap_remove(idx);
-            // self.score += 1;
         } 
         self.cars.retain(|car| car.pos.y > -8.0);
+
+        if let Some(idx) = self.coins.iter().position(|coin| coin.pos.distance(self.guy.pos) <= CATCH_DISTANCE) {
+            self.coins.swap_remove(idx);
+            self.score+=1
+        }
+
+        self.coins.retain(|coin| coin.pos.y > -8.0);
 
         // Spawn new coins
         if self.coin_timer > 0 {
@@ -368,8 +392,19 @@ impl engine::Game for Game {
                 size: Vec2 { x: 38.0, y: 38.0 },
             }
             .into();
-            *uv = SheetRegion::new(0, 20, 480, 8, 16, 16);
+            *uv = SheetRegion::new(0, 20, 480, 0, 16, 16);
         }
+
+        let pavement_start = coin_start + 1;
+        for (pavement, (trf, uv)) in self.pavements.iter().zip(
+            trfs[pavement_start..]
+                .iter_mut()
+                .zip(uvs[pavement_start..].iter_mut()),
+        ) {
+            *trf = (*pavement).into();
+            *uv = SheetRegion::new(0, 146, 480, 0, 8, 8);
+        }
+
 
         let sprite_count = coin_start + self.coins.len();
         // let sprite_count = car_start + self.cars.len();

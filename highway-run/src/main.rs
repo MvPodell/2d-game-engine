@@ -241,11 +241,17 @@ impl engine::Game for Game {
             .iter()
             .position(|car| car.pos.distance(self.guy.pos) <= CATCH_DISTANCE)
         {
+            println!("Score: {}", self.score);
             self.game_over = true;
-            // self.cars.swap_remove(idx);
-            // self.score += 1;
         } 
         self.cars.retain(|car| car.pos.y > -8.0);
+
+        if let Some(idx) = self.coins.iter().position(|coin| coin.pos.distance(self.guy.pos) <= CATCH_DISTANCE) {
+            self.coins.swap_remove(idx);
+            self.score+=1
+        }
+
+        self.coins.retain(|coin| coin.pos.y > -8.0);
         
         // Spawn new coins
         if self.coin_timer > 0 {
@@ -344,7 +350,7 @@ impl engine::Game for Game {
                 size: Vec2 { x: 38.4, y: 85.33 },
             }
             .into();
-            *uv = SheetRegion::new(0, 20, 480, 2, 16, 16);
+            *uv = SheetRegion::new(0, 20, 480, 8, 16, 16);
         }
 
         let sprite_count = coin_start + self.coins.len();
