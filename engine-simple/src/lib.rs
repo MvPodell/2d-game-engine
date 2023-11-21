@@ -6,6 +6,7 @@ pub use frenderer::{
 pub trait Game: Sized + 'static {
     fn new(engine: &mut Engine) -> Self;
     fn update(&mut self, engine: &mut Engine);
+    fn is_game_over(&self) -> bool;
     fn render(&mut self, engine: &mut Engine);
 }
 
@@ -53,6 +54,10 @@ impl Engine {
                         *control_flow = winit::event_loop::ControlFlow::Exit;
                     }
                     Event::MainEventsCleared => {
+                        // end game if there is a collision
+                        if G::is_game_over(&game) == true {
+                            *control_flow = winit::event_loop::ControlFlow::Exit;
+                        }
                         // compute elapsed time since last frame
                         let mut elapsed = now.elapsed().as_secs_f32();
                         // println!("{elapsed}");
@@ -80,8 +85,6 @@ impl Engine {
                         // Render prep
                         //self.renderer.sprites.set_camera_all(&frend.gpu, camera);
                         // update sprite positions and sheet regions
-                        // ok now render.
-                        // We could just call frend.render().
                         self.renderer.render();
                         self.window.request_redraw();
                     }

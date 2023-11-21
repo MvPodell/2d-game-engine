@@ -8,7 +8,7 @@ const W: f32 = 768.0;
 const H: f32 = 1280.0;
 const GUY_SPEED: f32 = 4.0;
 const SPRITE_MAX: usize = 16;
-const CATCH_DISTANCE: f32 = 32.0;
+const CATCH_DISTANCE: f32 = 8.0;
 const COLLISION_STEPS: usize = 3;
 struct Guy {
     pos: Vec2,
@@ -30,6 +30,7 @@ struct Game {
     curr_frame: usize,
     frame_counter: usize,
     frame_direction: isize,
+    game_over: bool,
 }
 
 impl engine::Game for Game {
@@ -63,7 +64,7 @@ impl engine::Game for Game {
         );
         let guy = Guy {
             pos: Vec2 {
-                x: 360.0,
+                x: 378.66,
                 y: 24.0,
             },
         };
@@ -77,7 +78,7 @@ impl engine::Game for Game {
         };
         let right_wall = AABB {
             center: Vec2 {
-                x: W - 8.0,
+                x: W-8.0,
                 y: H / 2.0,
             },
             size: Vec2 { x: 288.0, y: H },
@@ -99,10 +100,14 @@ impl engine::Game for Game {
             curr_frame: 0,
             frame_counter: 0,
             frame_direction: 1,
+            game_over: false,
         }
     }
+    fn is_game_over(&self) -> bool {
+        self.game_over
+    }
     fn update(&mut self, engine: &mut Engine) {
-
+        let mut now = std::time::Instant::now();
         // set the speed of animation for guy. Adjust number after modulo.
         self.frame_counter = (self.frame_counter + 1) % 5;
         if self.frame_counter == 0 {
@@ -115,7 +120,7 @@ impl engine::Game for Game {
             }
         }
         // column values
-        let possible_values = [216.0, 360.0, 504.0];
+        let possible_values = [261.33, 378.66, 496.0];
         let mut curr_col = self.guy.pos.x;
         let position = possible_values.iter().position(|&r| (curr_col - r).abs() < 1.0);
 
@@ -196,7 +201,6 @@ impl engine::Game for Game {
         let mut rng = rand::thread_rng();
 
         // create columns for cars
-        
         let uniform = Uniform::new(0, possible_values.len());
         let random_index = rng.sample(uniform);
         let random_value = possible_values[random_index];
@@ -224,9 +228,10 @@ impl engine::Game for Game {
             .iter()
             .position(|car| car.pos.distance(self.guy.pos) <= CATCH_DISTANCE)
         {
-            self.cars.swap_remove(idx);
-            self.score += 1;
-        }
+            self.game_over = true;
+            // self.cars.swap_remove(idx);
+            // self.score += 1;
+        } 
         self.cars.retain(|car| car.pos.y > -8.0)
     }
     fn render(&mut self, engine: &mut Engine) {
