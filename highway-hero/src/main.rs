@@ -12,9 +12,16 @@ const CATCH_DISTANCE: f32 = 8.0;
 const COLLISION_STEPS: usize = 3;
 struct Guy {
     pos: Vec2,
+    is_jumping: bool,
+    jump_velocity: f32,
 }
 
 struct Car {
+    pos: Vec2,
+    vel: Vec2,
+}
+
+struct Coin {
     pos: Vec2,
     vel: Vec2,
 }
@@ -25,12 +32,15 @@ struct Game {
     guy: Guy,
     cars: Vec<Car>,
     car_timer: u32,
+    coins: Vec<Coin>, 
+    coin_timer: u32,
     score: u32,
     font: engine_simple::BitFont,
     curr_frame: usize,
     frame_counter: usize,
     frame_direction: isize,
     game_over: bool,
+    floor_y_position: f32,
 }
 
 impl engine::Game for Game {
@@ -67,7 +77,10 @@ impl engine::Game for Game {
                 x: 378.66,
                 y: 24.0,
             },
+            is_jumping: false,
+            jump_velocity: 0.0,
         };
+        let floor_y_position = 16.0;
         let floor = AABB {
             center: Vec2 { x: W / 2.0, y: 8.0 },
             size: Vec2 { x: W, y: 16.0 },
@@ -95,12 +108,15 @@ impl engine::Game for Game {
             walls: vec![left_wall, right_wall, floor],
             cars: Vec::with_capacity(16),
             car_timer: 0,
+            coins: Vec::with_capacity(16),
+            coin_timer: 0,
             score: 0,
             font,
             curr_frame: 0,
             frame_counter: 0,
             frame_direction: 1,
             game_over: false,
+            floor_y_position,
         }
     }
     fn is_game_over(&self) -> bool {
@@ -134,6 +150,25 @@ impl engine::Game for Game {
         } else if engine.input.is_key_pressed(engine::Key::Right) {
             dir = 1.0
         }
+
+        // for jumping
+        if engine.input.is_key_pressed(engine::Key::Up) && !self.guy.is_jumping {
+            self.guy.is_jumping = true;
+            self.guy.jump_velocity = 8.0; // You can adjust the initial jump velocity
+        }
+        
+        // update Guy Position for Jumping
+        if self.guy.is_jumping {
+            self.guy.pos.y += 100.0; // this number can be changed
+            self.guy.jump_velocity -= 0.2; // Adjust the gravity value as needed
+
+            // Check if the guy has landed
+            if self.guy.pos.y >= self.floor_y_position {
+                // self.guy.pos.y = self.floor_y_position;
+                self.guy.is_jumping = false;
+            }
+        }
+
         // for continuous left or right movement
         // let dir = engine.input.key_axis(engine::Key::Left, engine::Key::Right);
         if -1.0 < curr_index as f32 + dir  && curr_index as f32 + dir < 3.0 {
@@ -232,7 +267,30 @@ impl engine::Game for Game {
             // self.cars.swap_remove(idx);
             // self.score += 1;
         } 
-        self.cars.retain(|car| car.pos.y > -8.0)
+        self.cars.retain(|car| car.pos.y > -8.0);
+
+        // Spawn new coins
+        if self.coin_timer > 0 {
+            self.coin_timer -= 1;
+        } else if self.coins.len() < 8 {
+            self.coins.push(Coin {
+                pos: Vec2 {
+                    x: random_value,
+                    y: H + 8.0,
+                },
+                vel: Vec2 {
+                    x: 0.0,
+                    y: rng.gen_range((-4.0)..(-1.0)),
+                },
+            });
+            self.coin_timer = rng.gen_range(30..90);
+        }
+        // Update coins
+        for coin in self.coins.iter_mut() {
+            coin.pos += coin.vel;
+        }
+        self.coins.retain(|coin| coin.pos.y > -8.0);
+
     }
     fn render(&mut self, engine: &mut Engine) {
         // set bg image
@@ -297,7 +355,24 @@ impl engine::Game for Game {
             .into();
             *uv = SheetRegion::new(0, 27, 525, 4, 27, 32);
         }
-        let sprite_count = car_start + self.cars.len();
+
+        // set coin
+        let coin_start = car_start + self.cars.len();
+        for (coin, (trf, uv)) in self.coins.iter().zip(
+            trfs[coin_start..]
+                .iter_mut()
+                .zip(uvs[coin_start..].iter_mut()),
+        ) {
+            *trf = AABB {
+                center: coin.pos,
+                size: Vec2 { x: 38.4, y: 85.33 },
+            }
+            .into();
+            *uv = SheetRegion::new(0, 0, 525, 4, 27, 32);
+        }
+
+        let sprite_count = coin_start + self.coins.len();
+        // let sprite_count = car_start + self.cars.len();
         let score_str = self.score.to_string();
         let text_len = score_str.len();
         engine.renderer.sprites.resize_sprite_group(
@@ -316,6 +391,12 @@ impl engine::Game for Game {
             }
             .into(),
             16.0,
+        );
+        let text_start = coin_start + self.coins.len();
+        engine.renderer.sprites.resize_sprite_group(
+            &engine.renderer.gpu,
+            0,
+            text_start + text_len,
         );
         engine
             .renderer
