@@ -1,14 +1,14 @@
 // TODO: use AABB instead of Rect for centered box, so collision checking doesn't have to offset by half size
 
-use engine_simple as engine;
-use engine_simple::wgpu;
-use engine_simple::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
+use engine as engine;
+use engine::wgpu;
+use engine::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
 use rand::{Rng, distributions::Uniform};
 const W: f32 = 768.0;
 const H: f32 = 1280.0;
 const GUY_SPEED: f32 = 4.0;
 const SPRITE_MAX: usize = 16;
-const CATCH_DISTANCE: f32 = 8.0;
+const CATCH_DISTANCE: f32 = 16.0;
 const COLLISION_STEPS: usize = 3;
 struct Guy {
     pos: Vec2,
@@ -35,7 +35,7 @@ struct Game {
     coins: Vec<Coin>, 
     coin_timer: u32,
     score: u32,
-    font: engine_simple::BitFont,
+    font: engine::BitFont,
     curr_frame: usize,
     frame_counter: usize,
     frame_direction: isize,
@@ -51,7 +51,7 @@ impl engine::Game for Game {
         };
         #[cfg(target_arch = "wasm32")]
         let sprite_img = {
-            let img_bytes = include_bytes!("content/demo.png");
+            let img_bytes = include_bytes!("../content/spritesheet.png");
             image::load_from_memory_with_format(&img_bytes, image::ImageFormat::Png)
                 .map_err(|e| e.to_string())
                 .unwrap()
@@ -365,10 +365,10 @@ impl engine::Game for Game {
         ) {
             *trf = AABB {
                 center: coin.pos,
-                size: Vec2 { x: 38.4, y: 85.33 },
+                size: Vec2 { x: 38.0, y: 38.0 },
             }
             .into();
-            *uv = SheetRegion::new(0, 0, 525, 4, 27, 32);
+            *uv = SheetRegion::new(0, 20, 480, 8, 16, 16);
         }
 
         let sprite_count = coin_start + self.coins.len();

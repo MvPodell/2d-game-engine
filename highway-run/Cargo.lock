@@ -451,7 +451,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 
 [[package]]
-name = "engine-simple"
+name = "engine"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.4.1",
@@ -460,16 +460,6 @@ dependencies = [
  "glam",
  "image",
  "serde",
- "winit",
-]
-
-[[package]]
-name = "engine-simple-game"
-version = "0.1.0"
-dependencies = [
- "engine-simple",
- "image",
- "rand",
  "winit",
 ]
 
@@ -802,6 +792,16 @@ name = "hexf-parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
+
+[[package]]
+name = "highway-run"
+version = "0.1.0"
+dependencies = [
+ "engine",
+ "image",
+ "rand",
+ "winit",
+]
 
 [[package]]
 name = "humantime"

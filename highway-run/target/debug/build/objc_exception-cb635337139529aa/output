@@ -21,7 +21,7 @@ cargo:rerun-if-env-changed=HOST_CFLAGS
 HOST_CFLAGS = None
 cargo:rerun-if-env-changed=CFLAGS
 CFLAGS = None
-running: "cc" "-O0" "-ffunction-sections" "-fdata-sections" "-fPIC" "-gdwarf-2" "-fno-omit-frame-pointer" "-arch" "arm64" "-Wall" "-Wextra" "-o" "/Users/MvPodell/cs181/game-engine-2d/engine-simple-game/target/debug/build/objc_exception-cb635337139529aa/out/extern/exception.o" "-c" "extern/exception.m"
+running: "cc" "-O0" "-ffunction-sections" "-fdata-sections" "-fPIC" "-gdwarf-2" "-fno-omit-frame-pointer" "-arch" "arm64" "-Wall" "-Wextra" "-o" "/Users/MvPodell/cs181/game-engine-2d/highway-run/target/debug/build/objc_exception-cb635337139529aa/out/extern/exception.o" "-c" "extern/exception.m"
 exit status: 0
 cargo:rerun-if-env-changed=AR_aarch64-apple-darwin
 AR_aarch64-apple-darwin = None
@@ -39,9 +39,9 @@ cargo:rerun-if-env-changed=HOST_ARFLAGS
 HOST_ARFLAGS = None
 cargo:rerun-if-env-changed=ARFLAGS
 ARFLAGS = None
-running: ZERO_AR_DATE="1" "ar" "cq" "/Users/MvPodell/cs181/game-engine-2d/engine-simple-game/target/debug/build/objc_exception-cb635337139529aa/out/libexception.a" "/Users/MvPodell/cs181/game-engine-2d/engine-simple-game/target/debug/build/objc_exception-cb635337139529aa/out/extern/exception.o"
+running: ZERO_AR_DATE="1" "ar" "cq" "/Users/MvPodell/cs181/game-engine-2d/highway-run/target/debug/build/objc_exception-cb635337139529aa/out/libexception.a" "/Users/MvPodell/cs181/game-engine-2d/highway-run/target/debug/build/objc_exception-cb635337139529aa/out/extern/exception.o"
 exit status: 0
-running: "ar" "s" "/Users/MvPodell/cs181/game-engine-2d/engine-simple-game/target/debug/build/objc_exception-cb635337139529aa/out/libexception.a"
+running: "ar" "s" "/Users/MvPodell/cs181/game-engine-2d/highway-run/target/debug/build/objc_exception-cb635337139529aa/out/libexception.a"
 exit status: 0
 cargo:rustc-link-lib=static=exception
-cargo:rustc-link-search=native=/Users/MvPodell/cs181/game-engine-2d/engine-simple-game/target/debug/build/objc_exception-cb635337139529aa/out
+cargo:rustc-link-search=native=/Users/MvPodell/cs181/game-engine-2d/highway-run/target/debug/build/objc_exception-cb635337139529aa/out
