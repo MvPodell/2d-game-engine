@@ -7,6 +7,7 @@ use rand::{Rng, distributions::Uniform};
 const W: f32 = 768.0;
 const H: f32 = 1280.0;
 const GUY_SPEED: f32 = 4.0;
+const PAVEMENT_SPEED: f32 = 4.0;
 const SPRITE_MAX: usize = 16;
 const CATCH_DISTANCE: f32 = 32.0;
 const COLLISION_STEPS: usize = 3;
@@ -252,6 +253,14 @@ impl engine::Game for Game {
         }
         let mut rng = rand::thread_rng();
 
+        // move pavement
+        for pavement in self.pavements.iter_mut() {
+            if pavement.center.y < 40.0 {
+                pavement.center.y = H;
+            }
+            pavement.center.y -= PAVEMENT_SPEED;
+        }
+
         // create columns for cars
         let uniform = Uniform::new(0, possible_values.len());
         let random_index = rng.sample(uniform);
@@ -268,7 +277,8 @@ impl engine::Game for Game {
                 },
                 vel: Vec2 {
                     x: 0.0,
-                    y: rng.gen_range((-4.0)..(-1.0)),
+                    // y: rng.gen_range((-4.0)..(-1.0)),
+                    y: -2.0,
                 },
             });
             self.car_timer = rng.gen_range(30..90);
