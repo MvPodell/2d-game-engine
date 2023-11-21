@@ -1,8 +1,7 @@
-// TODO: use AABB instead of Rect for centered box, so collision checking doesn't have to offset by half size
 
-use engine_simple as engine;
-use engine_simple::wgpu;
-use engine_simple::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
+use engine;
+use engine::wgpu;
+use engine::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
 use rand::{Rng, distributions::Uniform};
 const W: f32 = 768.0;
 const H: f32 = 1280.0;
@@ -21,12 +20,12 @@ struct Car {
 
 struct Game {
     camera: engine::Camera,
-    walls: Vec<AABB>,
+    walls: Vec<SPRITE>,
     guy: Guy,
     cars: Vec<Car>,
     car_timer: u32,
     score: u32,
-    font: engine_simple::BitFont,
+    font: engine::BitFont,
     curr_frame: usize,
     frame_counter: usize,
     frame_direction: isize,
@@ -41,7 +40,7 @@ impl engine::Game for Game {
         };
         #[cfg(target_arch = "wasm32")]
         let sprite_img = {
-            let img_bytes = include_bytes!("content/demo.png");
+            let img_bytes = include_bytes!("../content/spritesheet.png");
             image::load_from_memory_with_format(&img_bytes, image::ImageFormat::Png)
                 .map_err(|e| e.to_string())
                 .unwrap()
@@ -68,15 +67,15 @@ impl engine::Game for Game {
                 y: 24.0,
             },
         };
-        let floor = AABB {
+        let floor = SPRITE {
             center: Vec2 { x: W / 2.0, y: 8.0 },
             size: Vec2 { x: W, y: 16.0 },
         };
-        let left_wall = AABB {
+        let left_wall = SPRITE {
             center: Vec2 { x: 8.0, y: H / 2.0 },
             size: Vec2 { x: 288.0, y: H },
         };
-        let right_wall = AABB {
+        let right_wall = SPRITE {
             center: Vec2 {
                 x: W-8.0,
                 y: H / 2.0,
@@ -148,7 +147,7 @@ impl engine::Game for Game {
 
         // TODO: for multiple guys this might be better as flags on the guy for what side he's currently colliding with stuff on
         for _iter in 0..COLLISION_STEPS {
-            let guy_aabb = AABB {
+            let guy_sprite = SPRITE {
                 center: self.guy.pos,
                 size: Vec2 { x: 38.4, y: 85.33 },
             };
@@ -158,7 +157,7 @@ impl engine::Game for Game {
                 self.walls
                     .iter()
                     .enumerate()
-                    .filter_map(|(ri, w)| w.displacement(guy_aabb).map(|d| (ri, d))),
+                    .filter_map(|(ri, w)| w.displacement(guy_sprite).map(|d| (ri, d))),
             );
             if contacts.is_empty() {
                 break;
@@ -171,12 +170,12 @@ impl engine::Game for Game {
             });
             for (wall_idx, _disp) in contacts.iter() {
                 // TODO: for multiple guys should access self.guys[guy_idx].
-                let guy_aabb = AABB {
+                let guy_sprite = SPRITE {
                     center: self.guy.pos,
                     size: Vec2 { x: 38.4, y: 85.33 },
                 };
                 let wall = self.walls[*wall_idx];
-                let mut disp = wall.displacement(guy_aabb).unwrap_or(Vec2::ZERO);
+                let mut disp = wall.displacement(guy_sprite).unwrap_or(Vec2::ZERO);
                 // We got to a basically zero collision amount
                 if disp.x.abs() < std::f32::EPSILON || disp.y.abs() < std::f32::EPSILON {
                     break;
@@ -237,7 +236,7 @@ impl engine::Game for Game {
     fn render(&mut self, engine: &mut Engine) {
         // set bg image
         let (trfs, uvs) = engine.renderer.sprites.get_sprites_mut(0);
-        trfs[0] = AABB {
+        trfs[0] = SPRITE {
             center: Vec2 {
                 x: W / 2.0,
                 y: H / 2.0,
@@ -258,7 +257,7 @@ impl engine::Game for Game {
             *uv = SheetRegion::new(0, 0, 480, 12, 8, 8);
         }
         // set guy
-        trfs[guy_idx] = AABB {
+        trfs[guy_idx] = SPRITE {
             center: self.guy.pos,
             size: Vec2 { x: 38.4, y: 85.33 },
         }
@@ -290,7 +289,7 @@ impl engine::Game for Game {
                 .iter_mut()
                 .zip(uvs[car_start..].iter_mut()),
         ) {
-            *trf = AABB {
+            *trf = SPRITE {
                 center: car.pos,
                 size: Vec2 { x: 38.4, y: 85.33 },
             }
