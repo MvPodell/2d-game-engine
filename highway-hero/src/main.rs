@@ -47,7 +47,7 @@ impl engine::Game for Game {
                 .into_rgba8()
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let sprite_img = image::open("../content/demo2.png").unwrap().into_rgba8();
+        let sprite_img = image::open("../content/spritesheet.png").unwrap().into_rgba8();
         let sprite_tex = engine.renderer.gpu.create_texture(
             &sprite_img,
             wgpu::TextureFormat::Rgba8UnormSrgb,
@@ -261,7 +261,6 @@ impl engine::Game for Game {
         // TODO animation frame
 
         // animate the guy character
-        println!("curr_frame: {}", self.curr_frame);
         let ones_place = self.curr_frame % 10;
         match ones_place {
             0  => {
