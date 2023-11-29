@@ -6,9 +6,9 @@ use engine::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
 use rand::{Rng, distributions::Uniform};
 const W: f32 = 768.0;
 const H: f32 = 1280.0;
-const GUY_SPEED: f32 = 4.0;
+// const GUY_SPEED: f32 = 4.0;
 const PAVEMENT_SPEED: f32 = 4.0;
-const SPRITE_MAX: usize = 16;
+const SPRITE_MAX: usize = 70;
 const CATCH_DISTANCE: f32 = 32.0;
 const COLLISION_STEPS: usize = 3;
 struct Guy {
@@ -46,6 +46,8 @@ struct Game {
 }
 
 impl engine::Game for Game {
+
+    // create new game instance
     fn new(engine: &mut Engine) -> Self {
         let camera = Camera {
             screen_pos: [0.0, 0.0],
@@ -104,14 +106,14 @@ impl engine::Game for Game {
                 x: 8.0,
                 y: H / 2.0,
             },
-            size: Vec2 { x: 288.0, y: H },
+            size: Vec2 { x: 288.0, y: 288.0 },
         };
         let right_pavement = AABB {
             center: Vec2 {
                 x: W-8.0,
                 y: H / 2.0,
             },
-            size: Vec2 { x: 288.0, y: H },
+            size: Vec2 { x: 288.0, y: 288.0 },
         };
 
         let font = engine::BitFont::with_sheet_region(
@@ -124,9 +126,9 @@ impl engine::Game for Game {
             guy,
             walls: vec![left_wall, right_wall, floor],
             pavements: vec![left_pavement, right_pavement],
-            cars: Vec::with_capacity(16),
+            cars: Vec::with_capacity(33),
             car_timer: 0,
-            coins: Vec::with_capacity(16),
+            coins: Vec::with_capacity(33),
             coin_timer: 0,
             score: 0,
             font,
@@ -140,7 +142,7 @@ impl engine::Game for Game {
     fn is_game_over(&self) -> bool {
         self.game_over
     }
-    fn update(&mut self, engine: &mut Engine) {
+    fn update(&mut self, engine: &mut Engine, acc: f32) {
         let mut now = std::time::Instant::now();
         // set the speed of animation for guy. Adjust number after modulo.
         self.frame_counter = (self.frame_counter + 1) % 5;
@@ -199,14 +201,13 @@ impl engine::Game for Game {
 
         let mut contacts = Vec::with_capacity(self.walls.len());
 
-        // TODO: for multiple guys this might be better as flags on the guy for what side he's currently colliding with stuff on
         for _iter in 0..COLLISION_STEPS {
             let guy_aabb = AABB {
                 center: self.guy.pos,
-                size: Vec2 { x: 38.4, y: 85.33 },
+                size: Vec2 { x: 38.4, y: 65.33 },
             };
             contacts.clear();
-            // TODO: to generalize to multiple guys, need to iterate over guys first and have guy_index, rect_index, displacement in a contact tuple
+
             contacts.extend(
                 self.walls
                     .iter()
@@ -216,7 +217,7 @@ impl engine::Game for Game {
             if contacts.is_empty() {
                 break;
             }
-            // This part stays mostly the same for multiple guys, except the shape of contacts is different
+
             contacts.sort_by(|(_r1i, d1), (_r2i, d2)| {
                 d2.length_squared()
                     .partial_cmp(&d1.length_squared())
@@ -226,7 +227,7 @@ impl engine::Game for Game {
                 // TODO: for multiple guys should access self.guys[guy_idx].
                 let guy_aabb = AABB {
                     center: self.guy.pos,
-                    size: Vec2 { x: 38.4, y: 85.33 },
+                    size: Vec2 { x: 38.4, y: 65.33 },
                 };
                 let wall = self.walls[*wall_idx];
                 let mut disp = wall.displacement(guy_aabb).unwrap_or(Vec2::ZERO);
@@ -269,7 +270,7 @@ impl engine::Game for Game {
         // spawn new cars
         if self.car_timer > 0 {
             self.car_timer -= 1;
-        } else if self.cars.len() < 8 {
+        } else if self.cars.len() < 32 {
             self.cars.push(Car {
                 pos: Vec2 {
                     x: random_value,
@@ -296,7 +297,7 @@ impl engine::Game for Game {
         } 
         self.cars.retain(|car| car.pos.y > -8.0);
 
-        if let Some(idx) = self.coins.iter().position(|coin| coin.pos.distance(self.guy.pos) <= CATCH_DISTANCE) {
+        if let Some(idx) = self.coins.iter().position(|coin: &Coin| coin.pos.distance(self.guy.pos) <= CATCH_DISTANCE) {
             self.coins.swap_remove(idx);
             self.score+=1
         }
@@ -306,7 +307,7 @@ impl engine::Game for Game {
         // Spawn new coins
         if self.coin_timer > 0 {
             self.coin_timer -= 1;
-        } else if self.coins.len() < 8 {
+        } else if self.coins.len() < 32 {
             self.coins.push(Coin {
                 pos: Vec2 {
                     x: random_value,
@@ -314,7 +315,8 @@ impl engine::Game for Game {
                 },
                 vel: Vec2 {
                     x: 0.0,
-                    y: rng.gen_range((-4.0)..(-1.0)),
+                    y: -2.0,
+                    // y: rng.gen_range((-4.0)..(-1.0)),
                 },
             });
             self.coin_timer = rng.gen_range(30..90);
@@ -352,7 +354,7 @@ impl engine::Game for Game {
         // set guy
         trfs[guy_idx] = AABB {
             center: self.guy.pos,
-            size: Vec2 { x: 38.4, y: 85.33 },
+            size: Vec2 { x: 38.4, y: 65.33 },
         }
         .into();
         // TODO animation frame
@@ -374,9 +376,19 @@ impl engine::Game for Game {
             }
         }
 
+        let pavement_start = guy_idx + 1;
+        for (pavement, (trf, uv)) in self.pavements.iter().zip(
+            trfs[pavement_start..]
+                .iter_mut()
+                .zip(uvs[pavement_start..].iter_mut()),
+        ) {
+            *trf = (*pavement).into();
+            *uv = SheetRegion::new(0, 146, 480, 0, 8, 8);
+        }
+
         // uvs[guy_idx] = SheetRegion::new(0, 100, 480, 8, 14, 18);
         // set car
-        let car_start = guy_idx + 1;
+        let car_start = pavement_start + self.pavements.len();
         for (car, (trf, uv)) in self.cars.iter().zip(
             trfs[car_start..]
                 .iter_mut()
@@ -384,7 +396,7 @@ impl engine::Game for Game {
         ) {
             *trf = AABB {
                 center: car.pos,
-                size: Vec2 { x: 38.4, y: 85.33 },
+                size: Vec2 { x: 38.4, y: 65.33 },
             }
             .into();
             *uv = SheetRegion::new(0, 27, 525, 4, 27, 32);
@@ -399,25 +411,16 @@ impl engine::Game for Game {
         ) {
             *trf = AABB {
                 center: coin.pos,
-                size: Vec2 { x: 38.0, y: 38.0 },
+                size: Vec2 { x: 33.0, y: 38.0 },
             }
             .into();
             *uv = SheetRegion::new(0, 20, 480, 0, 16, 16);
         }
 
-        let pavement_start = coin_start + 1;
-        for (pavement, (trf, uv)) in self.pavements.iter().zip(
-            trfs[pavement_start..]
-                .iter_mut()
-                .zip(uvs[pavement_start..].iter_mut()),
-        ) {
-            *trf = (*pavement).into();
-            *uv = SheetRegion::new(0, 146, 480, 0, 8, 8);
-        }
-
+        
 
         let sprite_count = coin_start + self.coins.len();
-        // let sprite_count = car_start + self.cars.len();
+
         let score_str = self.score.to_string();
         let text_len = score_str.len();
         engine.renderer.sprites.resize_sprite_group(

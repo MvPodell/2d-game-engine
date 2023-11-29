@@ -5,7 +5,7 @@ pub use frenderer::{
 };
 pub trait Game: Sized + 'static {
     fn new(engine: &mut Engine) -> Self;
-    fn update(&mut self, engine: &mut Engine);
+    fn update(&mut self, engine: &mut Engine, acc: f32);
     fn is_game_over(&self) -> bool;
     fn render(&mut self, engine: &mut Engine);
 }
@@ -78,7 +78,7 @@ impl Engine {
                         while acc >= DT {
                             // simulate a frame
                             acc -= DT;
-                            game.update(&mut self);
+                            game.update(&mut self, acc);
                             self.input.next_frame();
                         }
                         game.render(&mut self);
