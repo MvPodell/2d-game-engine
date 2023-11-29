@@ -1,4 +1,4 @@
-// TODO: use AABB instead of Rect for centered box, so collision checking doesn't have to offset by half size
+// TODO: use SPRITE instead of Rect for centered box, so collision checking doesn't have to offset by half size
 
 use engine as engine;
 use engine::wgpu;
@@ -29,12 +29,12 @@ struct Coin {
 
 struct Game {
     camera: engine::Camera,
-    walls: Vec<AABB>,
+    walls: Vec<SPRITE>,
     guy: Guy,
     cars: Vec<Car>,
     car_timer: u32,
     coins: Vec<Coin>, 
-    pavements: Vec<AABB>,
+    pavements: Vec<SPRITE>,
     coin_timer: u32,
     score: u32,
     font: engine::BitFont,
@@ -85,15 +85,15 @@ impl engine::Game for Game {
             jump_velocity: 0.0,
         };
         let floor_y_position = 16.0;
-        let floor = AABB {
+        let floor = SPRITE {
             center: Vec2 { x: W / 2.0, y: 8.0 },
             size: Vec2 { x: W, y: 16.0 },
         };
-        let left_wall = AABB {
+        let left_wall = SPRITE {
             center: Vec2 { x: 8.0, y: H / 2.0 },
             size: Vec2 { x: 288.0, y: H },
         };
-        let right_wall = AABB {
+        let right_wall = SPRITE {
             center: Vec2 {
                 x: W-8.0,
                 y: H / 2.0,
@@ -101,14 +101,14 @@ impl engine::Game for Game {
             size: Vec2 { x: 288.0, y: H },
         };
 
-        let left_pavement = AABB {
+        let left_pavement = SPRITE {
             center: Vec2 {
                 x: 8.0,
                 y: H / 2.0,
             },
             size: Vec2 { x: 288.0, y: 288.0 },
         };
-        let right_pavement = AABB {
+        let right_pavement = SPRITE {
             center: Vec2 {
                 x: W-8.0,
                 y: H / 2.0,
@@ -202,7 +202,7 @@ impl engine::Game for Game {
         let mut contacts = Vec::with_capacity(self.walls.len());
 
         for _iter in 0..COLLISION_STEPS {
-            let guy_aabb = AABB {
+            let guy_sprite = SPRITE {
                 center: self.guy.pos,
                 size: Vec2 { x: 38.4, y: 65.33 },
             };
@@ -212,7 +212,7 @@ impl engine::Game for Game {
                 self.walls
                     .iter()
                     .enumerate()
-                    .filter_map(|(ri, w)| w.displacement(guy_aabb).map(|d| (ri, d))),
+                    .filter_map(|(ri, w)| w.displacement(guy_sprite).map(|d| (ri, d))),
             );
             if contacts.is_empty() {
                 break;
@@ -225,7 +225,7 @@ impl engine::Game for Game {
             });
             for (wall_idx, _disp) in contacts.iter() {
                 // TODO: for multiple guys should access self.guys[guy_idx].
-                let guy_aabb = AABB {
+                let guy_aabb = SPRITE {
                     center: self.guy.pos,
                     size: Vec2 { x: 38.4, y: 65.33 },
                 };
@@ -331,7 +331,7 @@ impl engine::Game for Game {
     fn render(&mut self, engine: &mut Engine) {
         // set bg image
         let (trfs, uvs) = engine.renderer.sprites.get_sprites_mut(0);
-        trfs[0] = AABB {
+        trfs[0] = SPRITE {
             center: Vec2 {
                 x: W / 2.0,
                 y: H / 2.0,
@@ -352,7 +352,7 @@ impl engine::Game for Game {
             *uv = SheetRegion::new(0, 0, 480, 12, 8, 8);
         }
         // set guy
-        trfs[guy_idx] = AABB {
+        trfs[guy_idx] = SPRITE {
             center: self.guy.pos,
             size: Vec2 { x: 38.4, y: 65.33 },
         }
@@ -394,7 +394,7 @@ impl engine::Game for Game {
                 .iter_mut()
                 .zip(uvs[car_start..].iter_mut()),
         ) {
-            *trf = AABB {
+            *trf = SPRITE {
                 center: car.pos,
                 size: Vec2 { x: 38.4, y: 65.33 },
             }
@@ -409,7 +409,7 @@ impl engine::Game for Game {
                 .iter_mut()
                 .zip(uvs[coin_start..].iter_mut()),
         ) {
-            *trf = AABB {
+            *trf = SPRITE {
                 center: coin.pos,
                 size: Vec2 { x: 33.0, y: 38.0 },
             }
