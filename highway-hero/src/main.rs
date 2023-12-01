@@ -9,6 +9,10 @@ const H: f32 = 1280.0;
 // const GUY_SPEED: f32 = 4.0;
 const PAVEMENT_SPEED: f32 = 4.0;
 const SPRITE_MAX: usize = 70;
+// sound/audio
+// use rodio::{Sink, Source};
+// use std::fs::File;
+// use std::io::BufReader;
 const CATCH_DISTANCE: f32 = 32.0;
 const COLLISION_STEPS: usize = 3;
 struct Guy {
@@ -27,6 +31,12 @@ struct Coin {
     vel: Vec2,
 }
 
+enum GameState {
+    TitleScreen,
+    InGame,
+    //GameOver, //eventually add the GameOver state
+}
+
 struct Game {
     camera: engine::Camera,
     walls: Vec<SPRITE>,
@@ -34,6 +44,8 @@ struct Game {
     cars: Vec<Car>,
     car_timer: u32,
     coins: Vec<Coin>, 
+    car_speed_multiplier: f32,
+    coin_speed_multiplier: f32,
     pavements: Vec<SPRITE>,
     coin_timer: u32,
     score: u32,
@@ -43,6 +55,8 @@ struct Game {
     frame_direction: isize,
     game_over: bool,
     floor_y_position: f32,
+    game_state: GameState,
+    // coin_collision_sound: Rc<RefCell<Sink>>, // coin sound
 }
 
 impl engine::Game for Game {
@@ -69,9 +83,11 @@ impl engine::Game for Game {
             sprite_img.dimensions(),
             Some("spr-demo.png"),
         );
+
         engine.renderer.sprites.add_sprite_group(
             &engine.renderer.gpu,
             &sprite_tex,
+            // &title_screen_tex,
             vec![Transform::zeroed(); SPRITE_MAX], //bg, three walls, guy, a few cars
             vec![SheetRegion::zeroed(); SPRITE_MAX],
             camera,
@@ -121,6 +137,16 @@ impl engine::Game for Game {
             SheetRegion::new(0, 0, 512, 0, 80, 8),
             10,
         );
+        let car_speed_multiplier = 1.0;
+        let coin_speed_multiplier = 1.0;
+
+        // Load the coin collision sound
+        // let coin_collision_file = File::open("/Users/rachelyang/game-engine-2d/content/coin.mp3").unwrap();
+        // let coin_collision_source = rodio::Decoder::new(BufReader::new(coin_collision_file)).unwrap();
+        // let coin_collision_sink = Rc::new(RefCell::new(Sink::new(&engine.renderer.audio)));
+        // coin_collision_sink.borrow_mut().append(coin_collision_source);
+
+
         Game {
             camera,
             guy,
@@ -130,6 +156,8 @@ impl engine::Game for Game {
             car_timer: 0,
             coins: Vec::with_capacity(33),
             coin_timer: 0,
+            car_speed_multiplier,
+            coin_speed_multiplier,
             score: 0,
             font,
             curr_frame: 0,
@@ -137,12 +165,25 @@ impl engine::Game for Game {
             frame_direction: 1,
             game_over: false,
             floor_y_position,
+            game_state: GameState::TitleScreen,
+            // coin_collision_sound: coin_collision_sink, // coin sound
         }
     }
     fn is_game_over(&self) -> bool {
         self.game_over
     }
     fn update(&mut self, engine: &mut Engine, acc: f32) {
+        match self.game_state {
+            GameState::TitleScreen => {
+                // Check if the space bar is pressed
+                if engine.input.is_key_pressed(engine::Key::Space) {
+                    // Transition to the in-game state
+                    self.game_state = GameState::InGame;
+                }
+            }
+            GameState::InGame => {
+
+
         let mut now = std::time::Instant::now();
         // set the speed of animation for guy. Adjust number after modulo.
         self.frame_counter = (self.frame_counter + 1) % 5;
@@ -271,17 +312,42 @@ impl engine::Game for Game {
         if self.car_timer > 0 {
             self.car_timer -= 1;
         } else if self.cars.len() < 32 {
-            self.cars.push(Car {
-                pos: Vec2 {
-                    x: random_value,
+            let mut valid_position = false;
+            let mut new_car_pos = Vec2::default();
+            while !valid_position {
+                let uniform = Uniform::new(0, possible_values.len());
+                let random_index = rng.sample(uniform);
+                new_car_pos = Vec2 {
+                    x: possible_values[random_index],
                     y: H + 8.0,
-                },
-                vel: Vec2 {
-                    x: 0.0,
-                    // y: rng.gen_range((-4.0)..(-1.0)),
-                    y: -2.0,
-                },
+                };
+
+                // Check if the new position overlaps with existing cars
+                valid_position = !self
+                    .cars
+                    .iter()
+                    .any(|car| new_car_pos.distance(car.pos) <= CATCH_DISTANCE)
+                    && !self
+                        .coins
+                        .iter()
+                        .any(|coin| new_car_pos.distance(coin.pos) <= CATCH_DISTANCE);
+            }
+
+            self.cars.push(Car {
+                pos: new_car_pos,
+                vel: Vec2 { x: 0.0, y: -2.0 },
             });
+            // self.cars.push(Car {
+            //     pos: Vec2 {
+            //         x: random_value,
+            //         y: H + 8.0,
+            //     },
+            //     vel: Vec2 {
+            //         x: 0.0,
+            //         // y: rng.gen_range((-4.0)..(-1.0)),
+            //         y: -2.0,
+            //     },
+            // });
             self.car_timer = rng.gen_range(30..90);
         }
         for car in self.cars.iter_mut() {
@@ -308,17 +374,41 @@ impl engine::Game for Game {
         if self.coin_timer > 0 {
             self.coin_timer -= 1;
         } else if self.coins.len() < 32 {
-            self.coins.push(Coin {
-                pos: Vec2 {
-                    x: random_value,
+            let mut valid_position = false;
+            let mut new_coin_pos = Vec2::default();
+            while !valid_position {
+                let uniform = Uniform::new(0, possible_values.len());
+                let random_index = rng.sample(uniform);
+                new_coin_pos = Vec2 {
+                    x: possible_values[random_index],
                     y: H + 8.0,
-                },
-                vel: Vec2 {
-                    x: 0.0,
-                    y: -2.0,
-                    // y: rng.gen_range((-4.0)..(-1.0)),
-                },
+                };
+
+                // Check if the new position overlaps with existing cars or coins
+                valid_position = !self
+                    .cars
+                    .iter()
+                    .any(|car| new_coin_pos.distance(car.pos) <= CATCH_DISTANCE)
+                    && !self
+                        .coins
+                        .iter()
+                        .any(|coin| new_coin_pos.distance(coin.pos) <= CATCH_DISTANCE);
+            }
+            self.coins.push(Coin {
+                pos: new_coin_pos,
+                vel: Vec2 { x: 0.0, y: -2.0 },
             });
+            // self.coins.push(Coin {
+            //     pos: Vec2 {
+            //         x: random_value,
+            //         y: H + 8.0,
+            //     },
+            //     vel: Vec2 {
+            //         x: 0.0,
+            //         y: -2.0,
+            //         // y: rng.gen_range((-4.0)..(-1.0)),
+            //     },
+            // });
             self.coin_timer = rng.gen_range(30..90);
         }
         // Update coins
@@ -327,8 +417,53 @@ impl engine::Game for Game {
         }
         self.coins.retain(|coin| coin.pos.y > -8.0);
 
+    //     if let Some(idx) = self
+    //     .coins
+    //     .iter()
+    //     .position(|coin: &Coin| coin.pos.distance(self.guy.pos) <= CATCH_DISTANCE)
+    // {
+    //     // Play the coin collision sound
+    //     self.coin_collision_sound.borrow_mut().play();
+
+
+    //     self.coins.swap_remove(idx);
+    //     self.score += 1;
+    // }
+
+        // Increase speed multipliers over time
+        self.car_speed_multiplier += 0.001 * acc;
+        self.coin_speed_multiplier += 0.001 * acc;
+
+        // Update cars with increased speed
+        for car in self.cars.iter_mut() {
+            car.pos += car.vel * self.car_speed_multiplier;
+        }
+
+        // Update coins with increased speed
+        for coin in self.coins.iter_mut() {
+            coin.pos += coin.vel * self.coin_speed_multiplier;
+        }
     }
+}
+}
     fn render(&mut self, engine: &mut Engine) {
+
+        match self.game_state {
+            GameState::TitleScreen => {
+                let (trfs, uvs) = engine.renderer.sprites.get_sprites_mut(0);
+                trfs[0] = SPRITE {
+                    center: Vec2 {
+                        x: W / 2.0,
+                        y: H / 2.0,
+                    },
+                    size: Vec2 { x: W, y: H },
+                }
+                .into();
+                uvs[0] = SheetRegion::new(0, 0, 640, 480, 640, 480); // Adjust UV coordinates if needed
+            }
+            GameState::InGame => {
+        
+
         // set bg image
         let (trfs, uvs) = engine.renderer.sprites.get_sprites_mut(0);
         trfs[0] = SPRITE {
@@ -454,7 +589,9 @@ impl engine::Game for Game {
             .renderer
             .sprites
             .set_camera_all(&engine.renderer.gpu, self.camera);
+        }
     }
+}
 }
 fn main() {
     Engine::new(winit::window::WindowBuilder::new()).run::<Game>();

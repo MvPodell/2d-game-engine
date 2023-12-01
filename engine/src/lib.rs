@@ -1,4 +1,6 @@
 pub use bytemuck::Zeroable;
+// pub use rodio::{Sink, Source};
+// pub use std::io::{BufReader, Cursor};
 pub use frenderer::{
     input::{Input, Key},
     wgpu, BitFont, Camera2D as Camera, Frenderer, SheetRegion, Transform,
@@ -8,11 +10,13 @@ pub trait Game: Sized + 'static {
     fn update(&mut self, engine: &mut Engine, acc: f32);
     fn is_game_over(&self) -> bool;
     fn render(&mut self, engine: &mut Engine);
+    // fn play_sound(&self, engine: &mut Engine, sound_data: &[u8]);
 }
 
 pub struct Engine {
     pub renderer: Frenderer,
     pub input: Input,
+    // pub audio_sink: Sink,
     event_loop: Option<winit::event_loop::EventLoop<()>>,
     window: winit::window::Window,
 }
@@ -24,10 +28,13 @@ impl Engine {
         let window_height  = 1280.0;
         let window = builder.with_inner_size(winit::dpi::LogicalSize::new(window_width, window_height)).build(&event_loop).unwrap();
         let renderer = frenderer::with_default_runtime(&window);
+        // let audio_device = rodio::default_output_device().unwrap();
+        // let audio_sink = Sink::new(&audio_device);
         let input = Input::default();
         Self {
             renderer,
             input,
+            // audio_sink,
             window,
             event_loop: Some(event_loop),
         }
