@@ -647,7 +647,8 @@ fn render(&mut self, engine: &mut Engine) {
             for (car, (transform, uv)) in self.cars.iter().zip(
                 transforms[car_start..]
                     .iter_mut()
-                    .zip(uvs[car_start..].iter_mut()),
+                    .zip(uvs[car_start..].iter_mut())
+                    .take(self.cars.len()),  // Limit the iteration to the minimum length
             ) {
                 *transform = SPRITE {
                     center: car.pos,
