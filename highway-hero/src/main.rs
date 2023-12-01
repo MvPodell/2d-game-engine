@@ -7,22 +7,21 @@ use rand::{Rng, distributions::Uniform};
 const W: f32 = 768.0;
 const H: f32 = 1280.0;
 // const GUY_SPEED: f32 = 4.0;
-const PAVEMENT_SPEED: f32 = 4.0;
-const SPRITE_MAX: usize = 70;
-const CATCH_DISTANCE: f32 = 32.0;
+const PAVEMENT_SPEED: f32 = -1.0;
+const SPRITE_MAX: usize = 104;
+const COLLISION_DISTANCE: f32 = 22.0;
+const COP_DISTANCE: f32 = 42.0;
 const COLLISION_STEPS: usize = 3;
+const GUY_Y_POS: f32 = 24.0;
 struct Guy {
     pos: Vec2,
     is_jumping: bool,
     jump_velocity: f32,
+    fwd_jump_frames: usize,
+    is_visible: bool,
 }
 
-struct Car {
-    pos: Vec2,
-    vel: Vec2,
-}
-
-struct Coin {
+struct Sprite {
     pos: Vec2,
     vel: Vec2,
 }
@@ -31,18 +30,19 @@ struct Game {
     camera: engine::Camera,
     walls: Vec<SPRITE>,
     guy: Guy,
-    cars: Vec<Car>,
+    cop: Guy,
+    cars: Vec<Sprite>,
     car_timer: u32,
-    coins: Vec<Coin>, 
-    pavements: Vec<SPRITE>,
+    coins: Vec<Sprite>, 
     coin_timer: u32,
+    pavements: Vec<Sprite>,
+    pavement_timer: u32,
     score: u32,
     font: engine::BitFont,
     curr_frame: usize,
     frame_counter: usize,
     frame_direction: isize,
     game_over: bool,
-    floor_y_position: f32,
 }
 
 impl engine::Game for Game {
@@ -55,7 +55,7 @@ impl engine::Game for Game {
         };
         #[cfg(target_arch = "wasm32")]
         let sprite_img = {
-            let img_bytes = include_bytes!("../content/spritesheet2.png");
+            let img_bytes = include_bytes!("../content/spritesheet.png");
             image::load_from_memory_with_format(&img_bytes, image::ImageFormat::Png)
                 .map_err(|e| e.to_string())
                 .unwrap()
@@ -79,12 +79,24 @@ impl engine::Game for Game {
         let guy = Guy {
             pos: Vec2 {
                 x: 378.66,
-                y: 24.0,
+                y: GUY_Y_POS,
             },
             is_jumping: false,
-            jump_velocity: 0.0,
+            jump_velocity: 10.0,
+            fwd_jump_frames: 0,
+            is_visible: true,
         };
-        let floor_y_position = 16.0;
+        let cop = Guy {
+            pos: Vec2 {
+                x: 378.66,
+                y: -50.0,
+            },
+            is_jumping: false,
+            jump_velocity: 10.0,
+            fwd_jump_frames: 0,
+            is_visible: false,
+        };
+
         let floor = SPRITE {
             center: Vec2 { x: W / 2.0, y: 8.0 },
             size: Vec2 { x: W, y: 16.0 },
@@ -101,49 +113,65 @@ impl engine::Game for Game {
             size: Vec2 { x: 288.0, y: H },
         };
 
-        let left_pavement = SPRITE {
-            center: Vec2 {
-                x: 8.0,
-                y: H / 2.0,
-            },
-            size: Vec2 { x: 288.0, y: 288.0 },
-        };
-        let right_pavement = SPRITE {
-            center: Vec2 {
-                x: W-8.0,
-                y: H / 2.0,
-            },
-            size: Vec2 { x: 288.0, y: 288.0 },
-        };
-
         let font = engine::BitFont::with_sheet_region(
             '0'..='9',
             SheetRegion::new(0, 0, 512, 0, 80, 8),
             10,
         );
+
+        let mut pavements = Vec::with_capacity(34);
+        // right pavement
+        pavements.push(Sprite {
+            pos: Vec2 {
+                x: W - 2.0,
+                y: 0.0,
+            },
+            vel: Vec2 {
+                x: 0.0,
+                y: -1.0,
+            },
+        });
+        // create a left pavement
+        pavements.push(Sprite {
+            pos: Vec2 {
+                x: 2.0,
+                y: 0.0,
+            },
+            vel: Vec2 {
+                x: 0.0,
+                y: -1.0,
+            },
+        });
         Game {
             camera,
             guy,
+            cop,
             walls: vec![left_wall, right_wall, floor],
-            pavements: vec![left_pavement, right_pavement],
-            cars: Vec::with_capacity(33),
+            cars: Vec::with_capacity(8),
             car_timer: 0,
             coins: Vec::with_capacity(33),
             coin_timer: 0,
+            pavements,
+            pavement_timer: 0,
             score: 0,
             font,
             curr_frame: 0,
             frame_counter: 0,
             frame_direction: 1,
             game_over: false,
-            floor_y_position,
         }
     }
+
+
+
     fn is_game_over(&self) -> bool {
         self.game_over
     }
+
+
+
     fn update(&mut self, engine: &mut Engine, acc: f32) {
-        let mut now = std::time::Instant::now();
+        let now = std::time::Instant::now();
         // set the speed of animation for guy. Adjust number after modulo.
         self.frame_counter = (self.frame_counter + 1) % 5;
         if self.frame_counter == 0 {
@@ -173,21 +201,44 @@ impl engine::Game for Game {
 
         // for jumping
         if engine.input.is_key_pressed(engine::Key::Up) && !self.guy.is_jumping {
+            println!("jump!");
             self.guy.is_jumping = true;
-            self.guy.jump_velocity = 8.0; // You can adjust the initial jump velocity
         }
         
-        // update Guy Position for Jumping
+        // track the number of frames the guy has been jumping for
         if self.guy.is_jumping {
-            self.guy.pos.y += 100.0; // this number can be changed
-            self.guy.jump_velocity -= 0.2; // Adjust the gravity value as needed
+            self.guy.fwd_jump_frames += 1;
 
-            // Check if the guy has landed
-            if self.guy.pos.y >= self.floor_y_position {
-                // self.guy.pos.y = self.floor_y_position;
-                self.guy.is_jumping = false;
-            }
+        // Continue the animation for 12 frames
+        if self.guy.fwd_jump_frames <= 12 {
+            // make the distance traveled between frames progressively less
+            self.guy.pos.y += self.guy.jump_velocity;
+            self.guy.jump_velocity -= 0.2;
+
+        } else if self.guy.pos.y >= 50.0 {
+            self.guy.pos.y -= 2.3;
+
+        } else {
+            // End the jumping animation
+            self.guy.is_jumping = false;
+            self.guy.fwd_jump_frames = 0;
+            self.guy.pos.y = 50.0;
+            self.guy.jump_velocity = 10.0;
         }
+
+        if self.cop.is_visible && self.cop.fwd_jump_frames <= 100 {
+            self.cop.fwd_jump_frames += 1;
+        }
+
+        if self.cop.fwd_jump_frames > 100 && self.cop.pos.y >= 0.0 {
+            self.cop.pos.y -= 1.0;
+        } else if self.cop.pos.y < 0.0 && self.cop.is_visible {
+            // end cop visibility
+            self.cop.fwd_jump_frames = 0;
+            self.cop.is_visible = false;
+            self.cop.pos.y = -50.0;
+        }
+    }
 
         // for continuous left or right movement
         // let dir = engine.input.key_axis(engine::Key::Left, engine::Key::Right);
@@ -198,6 +249,7 @@ impl engine::Game for Game {
         
         // update character's column
         self.guy.pos.x = curr_col;
+        self.cop.pos.x = curr_col;
 
         let mut contacts = Vec::with_capacity(self.walls.len());
 
@@ -254,15 +306,7 @@ impl engine::Game for Game {
         }
         let mut rng = rand::thread_rng();
 
-        // move pavement
-        for pavement in self.pavements.iter_mut() {
-            if pavement.center.y < 40.0 {
-                pavement.center.y = H;
-            }
-            pavement.center.y -= PAVEMENT_SPEED;
-        }
-
-        // create columns for cars
+        // create columns for cars/coins
         let uniform = Uniform::new(0, possible_values.len());
         let random_index = rng.sample(uniform);
         let random_value = possible_values[random_index];
@@ -270,45 +314,64 @@ impl engine::Game for Game {
         // spawn new cars
         if self.car_timer > 0 {
             self.car_timer -= 1;
-        } else if self.cars.len() < 32 {
-            self.cars.push(Car {
+        } else if self.cars.len() < 1000 {
+            self.cars.push(Sprite {
                 pos: Vec2 {
                     x: random_value,
                     y: H + 8.0,
                 },
                 vel: Vec2 {
                     x: 0.0,
-                    // y: rng.gen_range((-4.0)..(-1.0)),
                     y: -2.0,
                 },
             });
             self.car_timer = rng.gen_range(30..90);
         }
+        // update car velocities every frame
         for car in self.cars.iter_mut() {
             car.pos += car.vel;
         }
-        if let Some(idx) = self
+        // if any car is within the catch distance of the guy, mark a collision
+        if !self.guy.is_jumping {
+            if let Some(idx) = self
             .cars
             .iter()
-            .position(|car| car.pos.distance(self.guy.pos) <= CATCH_DISTANCE)
-        {
-            println!("Score: {}", self.score);
-            self.game_over = true;
-        } 
+            .position(|car| car.pos.distance(self.guy.pos) <= COLLISION_DISTANCE)
+            {
+                println!("Score: {}", self.score);
+                self.game_over = true;
+            } else if let Some(idx) = self
+            .cars
+            .iter()
+            .position(|car| car.pos.distance(self.guy.pos) <= COP_DISTANCE)
+            {
+                println!("COP!");
+                if !self.cop.is_visible {
+                    self.cop.is_visible = true;
+                    self.guy.pos.y = GUY_Y_POS + 100.0;
+                    self.cop.pos.y = GUY_Y_POS;
+                    // if the cop is already on the screen and it's been on the screen for more than the collision cooldown of 50 frames
+                } else if self.cop.is_visible && self.cop.fwd_jump_frames > 50 {
+                    self.game_over = true;
+                }
+            } 
+        }
+        // between frames, maintain all the cars on the screen that are above position -8.0
         self.cars.retain(|car| car.pos.y > -8.0);
 
-        if let Some(idx) = self.coins.iter().position(|coin: &Coin| coin.pos.distance(self.guy.pos) <= CATCH_DISTANCE) {
+        // if a coin is within the catch distance, add one to the score
+        if let Some(idx) = self.coins.iter().position(|coin: &Sprite| coin.pos.distance(self.guy.pos) <= COLLISION_DISTANCE) {
             self.coins.swap_remove(idx);
             self.score+=1
         }
 
-        self.coins.retain(|coin| coin.pos.y > -8.0);
+        // self.coins.retain(|coin| coin.pos.y > -8.0);
 
         // Spawn new coins
         if self.coin_timer > 0 {
             self.coin_timer -= 1;
         } else if self.coins.len() < 32 {
-            self.coins.push(Coin {
+            self.coins.push(Sprite {
                 pos: Vec2 {
                     x: random_value,
                     y: H + 8.0,
@@ -327,11 +390,52 @@ impl engine::Game for Game {
         }
         self.coins.retain(|coin| coin.pos.y > -8.0);
 
+        // Spawn new pavements
+        if self.pavement_timer > 0 {
+            self.pavement_timer -= 1;
+        } else if self.pavements.len() < 33 {
+            let newest_right_idx = self.pavements.len()-2;
+            let newest_left_idx = self.pavements.len()-1;
+            // create a right pavement
+            self.pavements.push(Sprite {
+                pos: Vec2 {
+                    x: W - 2.0,
+                    // add the next sprite one window height's length above the center of the most recently created sprite
+                    y: self.pavements[newest_right_idx].pos[1] + H,
+                },
+                vel: Vec2 {
+                    x: 0.0,
+                    y: PAVEMENT_SPEED,
+                },
+            });
+            // create a left pavement
+            self.pavements.push(Sprite {
+                pos: Vec2 {
+                    x: 2.0,
+                    y: self.pavements[newest_left_idx].pos[1] + H,
+                },
+                vel: Vec2 {
+                    x: 0.0,
+                    y: -1.0,
+                },
+            });
+            self.pavement_timer = rng.gen_range(30..90);
+        }
+        // Update pavements
+        for pavement in self.pavements.iter_mut() {
+            pavement.pos += pavement.vel;
+        }
+        self.pavements.retain(|pavement| pavement.pos.y > - H / 2.0 );
+
     }
+
+
+
+
     fn render(&mut self, engine: &mut Engine) {
         // set bg image
-        let (trfs, uvs) = engine.renderer.sprites.get_sprites_mut(0);
-        trfs[0] = SPRITE {
+        let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
+        transforms[0] = SPRITE {
             center: Vec2 {
                 x: W / 2.0,
                 y: H / 2.0,
@@ -343,78 +447,107 @@ impl engine::Game for Game {
         // set walls
         const WALL_START: usize = 1;
         let guy_idx = WALL_START + self.walls.len();
-        for (wall, (trf, uv)) in self.walls.iter().zip(
-            trfs[WALL_START..guy_idx]
+        for (wall, (transform, uv)) in self.walls.iter().zip(
+            transforms[WALL_START..guy_idx]
                 .iter_mut()
                 .zip(uvs[WALL_START..guy_idx].iter_mut()),
         ) {
-            *trf = (*wall).into();
+            *transform = (*wall).into();
             *uv = SheetRegion::new(0, 0, 480, 12, 8, 8);
         }
         // set guy
-        trfs[guy_idx] = SPRITE {
+        transforms[guy_idx] = SPRITE {
             center: self.guy.pos,
             size: Vec2 { x: 38.4, y: 65.33 },
         }
         .into();
-        // TODO animation frame
+
+        // animate the guy character
+        if !self.guy.is_jumping {
+            let ones_place = self.curr_frame % 10;
+            match ones_place {
+                0  => {
+                    uvs[guy_idx] = SheetRegion::new(0, 100, 498, 1, 14, 18);
+                }
+                1 => {
+                    uvs[guy_idx] = SheetRegion::new(0, 114, 480, 1, 14, 18);
+                }
+                2 => {
+                    uvs[guy_idx] = SheetRegion::new(0, 114, 498, 1, 14, 18);
+                }
+                _ => {
+                    // for other cases, if they come up
+                }
+            }
+        }
+
+        // set cop
+        let cop_idx = guy_idx + 1;
+        transforms[cop_idx] = SPRITE {
+            center: self.cop.pos,
+            size: Vec2 { x: 38.4, y: 65.33 },
+        }
+        .into();
 
         // animate the guy character
         let ones_place = self.curr_frame % 10;
         match ones_place {
             0  => {
-                uvs[guy_idx] = SheetRegion::new(0, 100, 498, 8, 14, 18);
+                uvs[cop_idx] = SheetRegion::new(0, 177, 498, 0, 14, 18);
             }
             1 => {
-                uvs[guy_idx] = SheetRegion::new(0, 114, 480, 8, 14, 18);
+                uvs[cop_idx] = SheetRegion::new(0, 191, 480, 0, 14, 18);
             }
             2 => {
-                uvs[guy_idx] = SheetRegion::new(0, 114, 498, 8, 14, 18);
+                uvs[cop_idx] = SheetRegion::new(0, 191, 498, 0, 14, 18);
             }
             _ => {
-                // Handle other cases if needed
+                // for other cases, if they come up
             }
         }
 
-        let pavement_start = guy_idx + 1;
-        for (pavement, (trf, uv)) in self.pavements.iter().zip(
-            trfs[pavement_start..]
+        // set pavement
+        let pavement_start = cop_idx + 1;
+        for (pavement, (transform, uv)) in self.pavements.iter().zip(
+            transforms[pavement_start..]
                 .iter_mut()
                 .zip(uvs[pavement_start..].iter_mut()),
         ) {
-            *trf = (*pavement).into();
-            *uv = SheetRegion::new(0, 146, 480, 0, 8, 8);
+            *transform = SPRITE {
+                center: pavement.pos,
+                size: Vec2 { x: 300.0, y: H },
+            }.into();
+            *uv = SheetRegion::new(0, 640, 0, 5, 45, 748);
         }
 
-        // uvs[guy_idx] = SheetRegion::new(0, 100, 480, 8, 14, 18);
         // set car
         let car_start = pavement_start + self.pavements.len();
-        for (car, (trf, uv)) in self.cars.iter().zip(
-            trfs[car_start..]
+        for (car, (transform, uv)) in self.cars.iter().zip(
+            transforms[car_start..]
                 .iter_mut()
                 .zip(uvs[car_start..].iter_mut()),
         ) {
-            *trf = SPRITE {
+            *transform = SPRITE {
                 center: car.pos,
                 size: Vec2 { x: 38.4, y: 65.33 },
             }
             .into();
-            *uv = SheetRegion::new(0, 27, 525, 4, 27, 32);
+            *uv = SheetRegion::new(0, 27, 525, 3, 27, 32);
         }
 
         // set coin
         let coin_start = car_start + self.cars.len();
-        for (coin, (trf, uv)) in self.coins.iter().zip(
-            trfs[coin_start..]
+        for (coin, (transform, uv)) in self.coins.iter().zip(
+            transforms[coin_start..]
                 .iter_mut()
                 .zip(uvs[coin_start..].iter_mut()),
         ) {
-            *trf = SPRITE {
+            *transform = SPRITE {
                 center: coin.pos,
                 size: Vec2 { x: 33.0, y: 38.0 },
             }
             .into();
-            *uv = SheetRegion::new(0, 20, 480, 0, 16, 16);
+            *uv = SheetRegion::new(0, 20, 480, 2, 16, 16);
         }
 
         
