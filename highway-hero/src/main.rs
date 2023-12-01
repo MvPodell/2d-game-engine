@@ -1,3 +1,4 @@
+
 // TODO: use SPRITE instead of Rect for centered box, so collision checking doesn't have to offset by half size
 
 use engine as engine;
@@ -62,7 +63,7 @@ impl engine::Game for Game {
                 .into_rgba8()
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let sprite_img = image::open("../content/spritesheet2.png").unwrap().into_rgba8();
+        let sprite_img = image::open("../content/spritesheet.png").unwrap().into_rgba8();
         let sprite_tex = engine.renderer.gpu.create_texture(
             &sprite_img,
             wgpu::TextureFormat::Rgba8UnormSrgb,
@@ -592,3 +593,4 @@ impl engine::Game for Game {
 fn main() {
     Engine::new(winit::window::WindowBuilder::new()).run::<Game>();
 }
+
