@@ -13,9 +13,13 @@ const SPRITE_MAX: usize = 104;
 const COLLISION_DISTANCE: f32 = 22.0;
 // sound/audio --> use Kira
 // use kira::{
-// 	manager::{backend::DefaultBackend, AudioManager, AudioManagerSettings},
-// 	sound::static_sound::{StaticSoundData, StaticSoundSettings},
+//     manager::{
+//         AudioManager, AudioManagerSettings,
+//         backend::DefaultBackend,
+//     },
+//     sound::static_sound::{StaticSoundData, StaticSoundSettings},
 // };
+
 const COP_DISTANCE: f32 = 42.0;
 const COLLISION_STEPS: usize = 3;
 const GUY_Y_POS: f32 = 24.0;
@@ -31,6 +35,11 @@ struct Sprite {
     pos: Vec2,
     vel: Vec2,
 }
+
+// struct AudioState {
+//     coin_collect_sound: StaticSoundData,
+//     audio_manager: AudioManager<DefaultBackend>,
+// }
 
 enum GameState {
     TitleScreen,
@@ -57,9 +66,7 @@ struct Game {
     frame_counter: usize,
     frame_direction: isize,
     game_over: bool,
-    // floor_y_position: f32,
     game_state: GameState,
-    // coin_collision_sound: Rc<RefCell<Sink>>, // coin sound
 }
 
 impl engine::Game for Game {
@@ -169,12 +176,13 @@ impl engine::Game for Game {
         let car_speed_multiplier = 1.0;
         let coin_speed_multiplier = 1.0;
 
-        // audio coin
-        // let mut manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default())?;
-        // manager.play(StaticSoundData::from_file(
-        //     "/Users/rachelyang/game-engine-2d/content/coin.mp3",
-        //     StaticSoundSettings::new().loop_region(3.6..6.0),
-        // )?)?;
+        // let mut audio_manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default())?;
+        // let coin_collect_sound = StaticSoundData::from_file("/Users/rachelyang/game-engine-2d/content/coin.mp3", StaticSoundSettings::default())?;
+        
+        // let audio_state = AudioState {
+        //     coin_collect_sound,
+        //     audio_manager,
+        // };
 
         Game {
             camera,
@@ -195,9 +203,8 @@ impl engine::Game for Game {
             frame_counter: 0,
             frame_direction: 1,
             game_over: false,
-            // floor_y_position,
+            // audio_state: AudioState,
             game_state: GameState::TitleScreen,
-            // coin_collision_sound: coin_collision_sink, // coin sound
         }
     }
 
@@ -536,6 +543,21 @@ impl engine::Game for Game {
             for coin in self.coins.iter_mut() {
                 coin.pos += coin.vel * self.coin_speed_multiplier;
             }
+
+            // play coin collision sound
+            // Inside the section where you handle coin collisions
+                // if let Some(idx) = self
+                // .coins
+                // .iter()
+                // .position(|coin: &Sprite| coin.pos.distance(self.guy.pos) <= COLLISION_DISTANCE)
+                // {
+                // self.coins.swap_remove(idx);
+                // self.score += 1;
+
+                // // Play the coin collecting sound
+                // self.audio_state.audio_manager.play(&self.audio_state.coin_collect_sound, Default::default())?;
+                // }
+
         }
     }
 }
@@ -644,10 +666,13 @@ fn render(&mut self, engine: &mut Engine) {
 
             // set car
             let car_start = pavement_start + self.pavements.len();
+            let remaining_transforms = &mut transforms[car_start..];
+            let remaining_uvs = &mut uvs[car_start..];
+
             for (car, (transform, uv)) in self.cars.iter().zip(
-                transforms[car_start..]
+                remaining_transforms
                     .iter_mut()
-                    .zip(uvs[car_start..].iter_mut())
+                    .zip(remaining_uvs.iter_mut())
                     .take(self.cars.len()),  // Limit the iteration to the minimum length
             ) {
                 *transform = SPRITE {
