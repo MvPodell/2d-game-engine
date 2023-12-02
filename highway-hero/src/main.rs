@@ -562,6 +562,18 @@ impl engine::Game for Game {
     }
 }
 fn render(&mut self, engine: &mut Engine) {
+
+    let score_str = self.score.to_string();
+    let text_len = score_str.len();
+
+    let sprite_count = self.walls.len() + self.pavements.len() + self.cars.len() + self.coins.len() + 3;
+
+    engine.renderer.sprites.resize_sprite_group(
+        &engine.renderer.gpu,
+        0,
+        sprite_count + text_len,
+    );
+
     match self.game_state {
         GameState::TitleScreen => {
             // let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
@@ -576,8 +588,9 @@ fn render(&mut self, engine: &mut Engine) {
             // uvs[0] = SheetRegion::new(0, 0, 640, 480, 640, 480); // Adjust UV coordinates if needed
         }
         GameState::InGame => {
-            // set bg image
             let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
+
+            // set bg image 
             transforms[0] = SPRITE {
                 center: Vec2 {
                     x: W / 2.0,
@@ -587,6 +600,7 @@ fn render(&mut self, engine: &mut Engine) {
             }
             .into();
             uvs[0] = SheetRegion::new(0, 0, 0, 16, 640, 480);
+
             // set walls
             const WALL_START: usize = 1;
             let guy_idx = WALL_START + self.walls.len();
@@ -666,14 +680,16 @@ fn render(&mut self, engine: &mut Engine) {
 
             // set car
             let car_start = pavement_start + self.pavements.len();
-            let remaining_transforms = &mut transforms[car_start..];
-            let remaining_uvs = &mut uvs[car_start..];
+
+            // println!("pavement_start: {}", pavement_start);
+            // println!("self.pavements.len(): {}", self.pavements.len());
+            // println!("transforms.len(): {}", transforms.len());
+            // assert!(car_start <= transforms.len(), "car_start is out of range");
 
             for (car, (transform, uv)) in self.cars.iter().zip(
-                remaining_transforms
+                transforms[car_start..]
                     .iter_mut()
-                    .zip(remaining_uvs.iter_mut())
-                    .take(self.cars.len()),  // Limit the iteration to the minimum length
+                    .zip(uvs[car_start..].iter_mut())
             ) {
                 *transform = SPRITE {
                     center: car.pos,
@@ -700,13 +716,7 @@ fn render(&mut self, engine: &mut Engine) {
 
             let sprite_count = coin_start + self.coins.len();
 
-            let score_str = self.score.to_string();
-            let text_len = score_str.len();
-            engine.renderer.sprites.resize_sprite_group(
-                &engine.renderer.gpu,
-                0,
-                sprite_count + text_len,
-            );
+
             self.font.draw_text(
                 &mut engine.renderer.sprites,
                 0,
