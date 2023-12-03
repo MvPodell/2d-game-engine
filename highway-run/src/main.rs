@@ -10,6 +10,7 @@ const GUY_SPEED: f32 = 4.0;
 const PAVEMENT_SPEED: f32 = -1.0;
 const SPRITE_MAX: usize = 1000;
 const COLLISION_DISTANCE: f32 = 22.0;
+const DROP_OFF_DIST: f32 = 75.0;
 // sound/audio --> use Kira
 // use kira::{
 //     manager::{
@@ -224,6 +225,7 @@ impl engine::Game for Game {
                 }
                 // column values
                 let possible_values = [261.33, 378.66, 496.0];
+                let side_values = [100.0, W-100.0];
 
                 // for jumping
                 if engine.input.is_key_pressed(engine::Key::Up) && !self.guy.is_jumping {
@@ -326,10 +328,15 @@ impl engine::Game for Game {
                 }
                 let mut rng = rand::thread_rng();
 
-                // create columns for cars/coins
+                // create columns for cars
                 let uniform = Uniform::new(0, possible_values.len());
                 let random_index = rng.sample(uniform);
                 let random_value = possible_values[random_index];
+
+                // create columns for coins
+                let uniform_coins = Uniform::new(0, side_values.len());
+                let random_index_coins = rng.sample(uniform_coins);
+                let random_value_coins = side_values[random_index_coins];
 
                 // spawn new cars
                 if self.car_timer > 0 {
@@ -360,17 +367,6 @@ impl engine::Game for Game {
                         pos: new_car_pos,
                         vel: Vec2 { x: 0.0, y: -2.0 },
                     });
-                    // self.cars.push(Car {
-                    //     pos: Vec2 {
-                    //         x: random_value,
-                    //         y: H + 8.0,
-                    //     },
-                    //     vel: Vec2 {
-                    //         x: 0.0,
-                    //         // y: rng.gen_range((-4.0)..(-1.0)),
-                    //         y: -2.0,
-                    //     },
-                    // });
                     self.car_timer = rng.gen_range(30..90);
                 }
                 // update car velocities every frame
@@ -409,7 +405,7 @@ impl engine::Game for Game {
                 if let Some(idx) = self
                     .coins
                     .iter()
-                    .position(|coin: &Sprite| coin.pos.distance(self.guy.pos) <= COLLISION_DISTANCE)
+                    .position(|coin: &Sprite| coin.pos.distance(self.guy.pos) <= DROP_OFF_DIST)
                 {
                     self.coins.swap_remove(idx);
                     self.score += 1
@@ -424,10 +420,10 @@ impl engine::Game for Game {
                     let mut valid_position = false;
                     let mut new_coin_pos = Vec2::default();
                     while !valid_position {
-                        let uniform = Uniform::new(0, possible_values.len());
-                        let random_index = rng.sample(uniform);
+                        let uniform_coin = Uniform::new(0, side_values.len());
+                        let random_index_coin = rng.sample(uniform_coin);
                         new_coin_pos = Vec2 {
-                            x: possible_values[random_index],
+                            x: side_values[random_index_coin],
                             y: H + 8.0,
                         };
 
@@ -445,17 +441,6 @@ impl engine::Game for Game {
                         pos: new_coin_pos,
                         vel: Vec2 { x: 0.0, y: -2.0 },
                     });
-                    // self.coins.push(Coin {
-                    //     pos: Vec2 {
-                    //         x: random_value,
-                    //         y: H + 8.0,
-                    //     },
-                    //     vel: Vec2 {
-                    //         x: 0.0,
-                    //         y: -2.0,
-                    //         // y: rng.gen_range((-4.0)..(-1.0)),
-                    //     },
-                    // });
                     self.coin_timer = rng.gen_range(30..90);
                 }
                 // Update coins
