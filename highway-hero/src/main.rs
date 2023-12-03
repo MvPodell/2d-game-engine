@@ -185,8 +185,7 @@ impl engine::Game for Game {
         // Create an audio manager
         let audio_manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
         // Load the coin sound
-        let coin_sound = StaticSoundData::from_file("/Users/rachelyang/game-engine-2d/content/coin.mp3", StaticSoundSettings::default()).unwrap();
-
+        let coin_sound = StaticSoundData::from_file("../content/coin.mp3", StaticSoundSettings::default()).unwrap();
 
         Game {
             camera,
