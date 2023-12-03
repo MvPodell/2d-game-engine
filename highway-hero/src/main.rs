@@ -36,7 +36,7 @@ struct Sprite {
 enum GameState {
     TitleScreen,
     InGame,
-    //GameOver, //eventually add the GameOver
+    GameOver, 
 }
 
 struct Game {
@@ -54,6 +54,7 @@ struct Game {
     pavement_timer: u32,
     score: u32,
     font: engine::BitFont,
+    font_end: engine::BitFont,
     curr_frame: usize,
     frame_counter: usize,
     frame_direction: isize,
@@ -71,17 +72,13 @@ impl engine::Game for Game {
             screen_pos: [0.0, 0.0],
             screen_size: [W, H],
         };
-        #[cfg(target_arch = "wasm32")]
-        let sprite_img = {
-            let img_bytes = include_bytes!("../content/spritesheet.png");
-            let img_bytes = include_bytes!("../content/spritesheet2.png");
-            let img_bytes = include_bytes!("../content/spritesheet.png");
-            image::load_from_memory_with_format(&img_bytes, image::ImageFormat::Png)
-                .map_err(|e| e.to_string())
-                .unwrap()
-                .into_rgba8()
-        };
+
         #[cfg(not(target_arch = "wasm32"))]
+        let start_img = image::open("../content/title_screen2.png").unwrap().into_rgba8();
+        let start_tex = engine.renderer.gpu.create_texture(&start_img, wgpu::TextureFormat::Rgba8UnormSrgb, start_img.dimensions(), Some("start-sprite.png"),);
+        let end_img = image::open("../content/end_screen.png").unwrap().into_rgba8();
+        let end_tex = engine.renderer.gpu.create_texture(&end_img, wgpu::TextureFormat::Rgba8UnormSrgb, end_img.dimensions(), Some("end-sprite.png"),);
+
         let sprite_img = image::open("../content/spritesheet.png")
             .unwrap()
             .into_rgba8();
@@ -92,6 +89,7 @@ impl engine::Game for Game {
             Some("spr-demo.png"),
         );
 
+        // game sprite group
         engine.renderer.sprites.add_sprite_group(
             &engine.renderer.gpu,
             &sprite_tex,
@@ -100,6 +98,25 @@ impl engine::Game for Game {
             vec![SheetRegion::zeroed(); SPRITE_MAX],
             camera,
         );
+
+        // start sprite group
+        engine.renderer.sprites.add_sprite_group(
+            &engine.renderer.gpu,
+            &start_tex,
+            vec![Transform::zeroed(); 1], //bg, three walls, guy, a few cars
+            vec![SheetRegion::zeroed(); 1],
+            camera,
+        );
+
+        // end sprite group
+        engine.renderer.sprites.add_sprite_group(
+            &engine.renderer.gpu,
+            &end_tex,
+            vec![Transform::zeroed(); 1], //bg, three walls, guy, a few cars
+            vec![SheetRegion::zeroed(); 1],
+            camera,
+        );
+
         let guy = Guy {
             pos: Vec2 {
                 x: 378.66,
@@ -144,6 +161,11 @@ impl engine::Game for Game {
             SheetRegion::new(0, 0, 512, 0, 80, 8),
             10,
         );
+        let font_end = engine::BitFont::with_sheet_region(
+            '0'..='9',
+            SheetRegion::new(0, 0, 868, 0, 80, 8),
+            10,
+        );
 
         let mut pavements = Vec::with_capacity(34);
         // right pavement
@@ -181,6 +203,7 @@ impl engine::Game for Game {
             pavement_timer: 0,
             score: 0,
             font,
+            font_end,
             curr_frame: 0,
             frame_counter: 0,
             frame_direction: 1,
@@ -201,6 +224,7 @@ impl engine::Game for Game {
             GameState::TitleScreen => {
                 // Check if the space bar is pressed
                 if engine.input.is_key_pressed(engine::Key::Space) {
+                    engine.renderer.sprites.remove_sprite_group(1);
                     // Transition to the in-game state
                     self.game_state = GameState::InGame;
                 }
@@ -401,7 +425,8 @@ impl engine::Game for Game {
                         .position(|car| car.pos.distance(self.guy.pos) <= COLLISION_DISTANCE)
                     {
                         println!("Score: {}", self.score);
-                        self.game_over = true;
+                        engine.renderer.sprites.remove_sprite_group(0);
+                        self.game_state = GameState::GameOver;
                     } else if let Some(idx) = self
                         .cars
                         .iter()
@@ -541,35 +566,54 @@ impl engine::Game for Game {
                     self.score += 1;
                 }
             }
+            GameState::GameOver => {
+                // hello
+            }
         }
     }
     fn render(&mut self, engine: &mut Engine) {
-        let score_str = self.score.to_string();
-        let text_len = score_str.len();
-
-        let sprite_count =
-            self.walls.len() + self.pavements.len() + self.cars.len() + self.coins.len() + 3;
-
-        engine.renderer.sprites.resize_sprite_group(
-            &engine.renderer.gpu,
-            0,
-            sprite_count + text_len,
-        );
 
         match self.game_state {
             GameState::TitleScreen => {
-                // let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
-                // transforms[0] = SPRITE {
-                //     center: Vec2 {
-                //         x: W / 2.0,
-                //         y: H / 2.0,
-                //     },
-                //     size: Vec2 { x: W, y: H },
-                // }
-                // .into();
-                // uvs[0] = SheetRegion::new(0, 0, 640, 480, 640, 480); // Adjust UV coordinates if needed
+                let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(1);
+                transforms[0] = SPRITE {
+                    center: Vec2 {
+                        x: W / 2.0,
+                        y: H / 2.0,
+                    },
+                    size: Vec2 { x: W, y: H-(H/4.0) },
+                }
+                .into();
+                uvs[0] = SheetRegion::new(0, 0, 0, 0, 768, 864); // Adjust UV coordinates if needed
+
+                engine.renderer.sprites.resize_sprite_group(
+                    &engine.renderer.gpu,
+                    1,
+                    1,
+                );
+                engine.renderer.sprites.upload_sprites(
+                    &engine.renderer.gpu,
+                    1,
+                    0..1,
+                );
+                engine
+                    .renderer
+                    .sprites
+                    .set_camera_all(&engine.renderer.gpu, self.camera);
             }
             GameState::InGame => {
+                let score_str = self.score.to_string();
+                let text_len = score_str.len();
+
+                let sprite_count =
+                    self.walls.len() + self.pavements.len() + self.cars.len() + self.coins.len() + 3;
+
+                engine.renderer.sprites.resize_sprite_group(
+                    &engine.renderer.gpu,
+                    0,
+                    sprite_count + text_len,
+                );
+
                 let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
 
                 // set bg image
@@ -715,6 +759,50 @@ impl engine::Game for Game {
                     &engine.renderer.gpu,
                     0,
                     0..sprite_count + text_len,
+                );
+                engine
+                    .renderer
+                    .sprites
+                    .set_camera_all(&engine.renderer.gpu, self.camera);
+            }
+            GameState::GameOver => {
+                // the end screen sprite group is now at index 0 after removing the first two groups
+                let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
+                transforms[0] = SPRITE {
+                    center: Vec2 {
+                        x: W / 2.0,
+                        y: H / 2.0,
+                    },
+                    size: Vec2 { x: W, y: H-(H/4.0) },
+                }
+                .into();
+                uvs[0] = SheetRegion::new(0, 0, 0, 1, 768, 864); // Adjust UV coordinates if needed
+
+                let score_str = self.score.to_string();
+                let end_text_len = score_str.len();
+
+                self.font_end.draw_text(
+                    &mut engine.renderer.sprites,
+                    0,
+                    1,
+                    &score_str,
+                    Vec2 {
+                        x: (W / 2.0) + 60.0,
+                        y: (H / 2.0) - 30.0,
+                    }
+                    .into(),
+                    40.0,
+                );
+
+                engine.renderer.sprites.resize_sprite_group(
+                    &engine.renderer.gpu,
+                    0,
+                    1 + end_text_len,
+                );
+                engine.renderer.sprites.upload_sprites(
+                    &engine.renderer.gpu,
+                    0,
+                    0..1 + end_text_len,
                 );
                 engine
                     .renderer
