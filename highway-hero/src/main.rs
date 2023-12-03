@@ -1,5 +1,3 @@
-// TODO: use SPRITE instead of Rect for centered box, so collision checking doesn't have to offset by half size
-
 use engine;
 use engine::wgpu;
 use engine::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
@@ -11,13 +9,13 @@ const PAVEMENT_SPEED: f32 = -1.0;
 const SPRITE_MAX: usize = 1000;
 const COLLISION_DISTANCE: f32 = 22.0;
 // sound/audio --> use Kira
-// use kira::{
-//     manager::{
-//         AudioManager, AudioManagerSettings,
-//         backend::DefaultBackend,
-//     },
-//     sound::static_sound::{StaticSoundData, StaticSoundSettings},
-// };
+use kira::{
+    manager::{
+        AudioManager, AudioManagerSettings,
+        backend::DefaultBackend,
+    },
+    sound::static_sound::{StaticSoundData, StaticSoundSettings},
+};
 
 const COP_DISTANCE: f32 = 42.0;
 const COLLISION_STEPS: usize = 3;
@@ -34,11 +32,6 @@ struct Sprite {
     pos: Vec2,
     vel: Vec2,
 }
-
-// struct AudioState {
-//     coin_collect_sound: StaticSoundData,
-//     audio_manager: AudioManager<DefaultBackend>,
-// }
 
 enum GameState {
     TitleScreen,
@@ -66,6 +59,9 @@ struct Game {
     frame_direction: isize,
     game_over: bool,
     game_state: GameState,
+    // coin sound
+    audio_manager: AudioManager<DefaultBackend>,
+    coin_sound: StaticSoundData,
 }
 
 impl engine::Game for Game {
@@ -163,13 +159,12 @@ impl engine::Game for Game {
         let car_speed_multiplier = 1.0;
         let coin_speed_multiplier = 1.0;
 
-        // let mut audio_manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default())?;
-        // let coin_collect_sound = StaticSoundData::from_file("/Users/rachelyang/game-engine-2d/content/coin.mp3", StaticSoundSettings::default())?;
+        // coin sound
+        // Create an audio manager
+        let audio_manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
+        // Load the coin sound
+        let coin_sound = StaticSoundData::from_file("/Users/rachelyang/game-engine-2d/content/coin.mp3", StaticSoundSettings::default()).unwrap();
 
-        // let audio_state = AudioState {
-        //     coin_collect_sound,
-        //     audio_manager,
-        // };
 
         Game {
             camera,
@@ -190,8 +185,10 @@ impl engine::Game for Game {
             frame_counter: 0,
             frame_direction: 1,
             game_over: false,
-            // audio_state: AudioState,
             game_state: GameState::TitleScreen,
+            // coin sound
+            audio_manager,
+            coin_sound,
         }
     }
 
@@ -531,19 +528,18 @@ impl engine::Game for Game {
                     coin.pos += coin.vel * self.coin_speed_multiplier;
                 }
 
-                // play coin collision sound
-                // Inside the section where you handle coin collisions
-                // if let Some(idx) = self
-                // .coins
-                // .iter()
-                // .position(|coin: &Sprite| coin.pos.distance(self.guy.pos) <= COLLISION_DISTANCE)
-                // {
-                // self.coins.swap_remove(idx);
-                // self.score += 1;
+                // coin sound
+                // Check if the guy collides with a coin
+                if let Some(idx) = self.coins.iter().position(|coin| coin.pos.distance(self.guy.pos) <= COLLISION_DISTANCE) {
+                    // Play the coin sound
+                    self.audio_manager.play(self.coin_sound.clone()).unwrap();
 
-                // // Play the coin collecting sound
-                // self.audio_state.audio_manager.play(&self.audio_state.coin_collect_sound, Default::default())?;
-                // }
+                    // Remove the collected coin
+                    self.coins.swap_remove(idx);
+                    
+                    // Increase the score
+                    self.score += 1;
+                }
             }
         }
     }
