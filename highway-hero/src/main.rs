@@ -671,7 +671,7 @@ impl engine::Game for Game {
                 }
                 .into();
 
-                // animate the guy character
+                // animate the cop character
                 let ones_place = self.curr_frame % 10;
                 match ones_place {
                     0 => {
