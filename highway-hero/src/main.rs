@@ -8,7 +8,7 @@ const H: f32 = 1280.0;
 const PAVEMENT_SPEED: f32 = -1.0;
 const SPRITE_MAX: usize = 1000;
 const COLLISION_DISTANCE: f32 = 22.0;
-// sound/audio --> use Kira
+// sound/audio
 use kira::{
     manager::{
         AudioManager, AudioManagerSettings,
@@ -16,7 +16,6 @@ use kira::{
     },
     sound::static_sound::{StaticSoundData, StaticSoundSettings},
 };
-
 const COP_DISTANCE: f32 = 42.0;
 const COLLISION_STEPS: usize = 3;
 const GUY_Y_POS: f32 = 24.0;

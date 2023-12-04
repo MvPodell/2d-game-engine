@@ -1,11 +1,16 @@
-// TODO: use SPRITE instead of Rect for centered box, so collision checking doesn't have to offset by half size
-
 use engine;
 use engine::wgpu;
 use engine::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
 use rand::{distributions::Uniform, Rng};
 use std::fmt;
-
+// sound/audio --> use Kira
+use kira::{
+    manager::{
+        AudioManager, AudioManagerSettings,
+        backend::DefaultBackend,
+    },
+    sound::static_sound::{StaticSoundData, StaticSoundSettings},
+};
 const W: f32 = 768.0;
 const H: f32 = 1280.0;
 const GUY_SPEED: f32 = 4.0;
@@ -24,11 +29,6 @@ struct Sprite {
     pos: Vec2,
     vel: Vec2,
 }
-
-// struct AudioState {
-//     building_collect_sound: StaticSoundData,
-//     audio_manager: AudioManager<DefaultBackend>,
-// }
 
 #[derive(PartialEq, Debug, Clone)]
 enum Job {
@@ -101,6 +101,10 @@ struct Game {
     game_over: bool,
     game_state: GameState,
     on_bus: Vec<Person>,
+    // sound
+    audio_manager: AudioManager<DefaultBackend>,
+    drop_sound: StaticSoundData,
+    cat_sound: StaticSoundData,
 }
 
 impl engine::Game for Game {
@@ -192,13 +196,13 @@ impl engine::Game for Game {
 
         let on_bus: Vec<Person> = Vec::with_capacity(5);
 
-        // let mut audio_manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default())?;
-        // let building_collect_sound = StaticSoundData::from_file("/Users/rachelyang/game-engine-2d/content/building.mp3", StaticSoundSettings::default())?;
-
-        // let audio_state = AudioState {
-        //     building_collect_sound,
-        //     audio_manager,
-        // };
+        // drop sound
+        // Create an audio manager
+        let audio_manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
+        // Load the drop sound
+        let drop_sound = StaticSoundData::from_file("../content/drop_off.mp3", StaticSoundSettings::default()).unwrap();
+        // Load the cat sound
+        let cat_sound = StaticSoundData::from_file("../content/cat_meow.wav", StaticSoundSettings::default()).unwrap();
 
         Game {
             camera,
@@ -220,7 +224,10 @@ impl engine::Game for Game {
             frame_counter: 0,
             frame_direction: 1,
             game_over: false,
-            // audio_state: AudioState,
+            // sound
+            audio_manager,
+            drop_sound,
+            cat_sound,
             game_state: GameState::TitleScreen,
             on_bus,
         }
@@ -372,15 +379,6 @@ impl engine::Game for Game {
                 for animal in self.animals.iter_mut() {
                     animal.pos += animal.vel;
                 }
-                // if any cat/dog is within the catch distance of the bus, mark a collision
-                if let Some(idx) = self
-                    .animals
-                    .iter()
-                    .position(|animal| animal.pos.distance(self.bus.pos) <= COLLISION_DISTANCE)
-                {
-                    println!("Score: {}", self.score);
-                    self.game_over = true;
-                } 
                 
                 // between frames, maintain all the animals on the screen that are above position -8.0
                 self.animals.retain(|animal| animal.pos.y > -8.0);
@@ -436,6 +434,8 @@ impl engine::Game for Game {
                     .iter()
                     .any(|animal| animal.pos.distance(self.bus.pos) <= COLLISION_DISTANCE)
                 {
+                    // play cat sound
+                    self.audio_manager.play(self.cat_sound.clone()).unwrap(); 
                     println!("Game Over! Your final score: {}", self.score);
                     self.game_over = true;
                 }
@@ -456,6 +456,7 @@ impl engine::Game for Game {
                         self.people.swap_remove(idx);
                     }
                 }
+
                 self.people.retain(|person| person.pos.y > -8.0);
                 // between frames, maintain all the animals on the screen that are above position -8.0
                 self.animals.retain(|animal| animal.pos.y > -8.0);
@@ -480,10 +481,13 @@ impl engine::Game for Game {
                             .iter()
                             .position(|person| person.job == self.buildings[idx].job)
                         {
+                            // play drop sound
+                            self.audio_manager.play(self.drop_sound.clone()).unwrap(); 
                             println!("Removed a {} from the bus!", self.buildings[idx].job);
                             self.on_bus.swap_remove(person_idx);
                             println!("number of people on bus: {}", self.on_bus.len());
                             self.score += 1;
+
                         }
                         self.buildings.swap_remove(idx);
                     }
