@@ -110,15 +110,13 @@ impl engine::Game for Game {
             screen_pos: [0.0, 0.0],
             screen_size: [W, H],
         };
-        #[cfg(target_arch = "wasm32")]
-        let sprite_img = {
-            let img_bytes = include_bytes!("../content/spritesheet.png");
-            image::load_from_memory_with_format(&img_bytes, image::ImageFormat::Png)
-                .map_err(|e| e.to_string())
-                .unwrap()
-                .into_rgba8()
-        };
         #[cfg(not(target_arch = "wasm32"))]
+        let start_img = image::open("../content/title_screen_game2.png").unwrap().into_rgba8();
+        let start_tex = engine.renderer.gpu.create_texture(&start_img, wgpu::TextureFormat::Rgba8UnormSrgb, start_img.dimensions(), Some("start-sprite.png"),);
+        // let end_img = image::open("../content/end_screen_game2.png").unwrap().into_rgba8();
+        // let end_tex = engine.renderer.gpu.create_texture(&end_img, wgpu::TextureFormat::Rgba8UnormSrgb, end_img.dimensions(), Some("end-sprite.png"),);
+        // #[cfg(target_arch = "wasm32")]
+
         let sprite_img = image::open("../content/run-spritesheet.png")
             .unwrap()
             .into_rgba8();
@@ -137,6 +135,16 @@ impl engine::Game for Game {
             vec![SheetRegion::zeroed(); SPRITE_MAX],
             camera,
         );
+        
+        // start sprite group
+        engine.renderer.sprites.add_sprite_group(
+            &engine.renderer.gpu,
+            &start_tex,
+            vec![Transform::zeroed(); 1],
+            vec![SheetRegion::zeroed(); 1],
+            camera,
+        );
+
         let bus = Bus {
             pos: Vec2 {
                 x: 378.66,
@@ -581,16 +589,31 @@ impl engine::Game for Game {
 
         match self.game_state {
             GameState::TitleScreen => {
-                // let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
-                // transforms[0] = SPRITE {
-                //     center: Vec2 {
-                //         x: W / 2.0,
-                //         y: H / 2.0,
-                //     },
-                //     size: Vec2 { x: W, y: H },
-                // }
-                // .into();
-                // uvs[0] = SheetRegion::new(0, 0, 640, 480, 640, 480); // Adjust UV coordinates if needed
+                let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(1);
+                transforms[0] = SPRITE {
+                    center: Vec2 {
+                        x: W / 2.0,
+                        y: H / 2.0,
+                    },
+                    size: Vec2 { x: W, y: H-(H/4.0) },
+                }
+                .into();
+                uvs[0] = SheetRegion::new(0, 0, 0, 0, 768, 864); // Adjust UV coordinates if needed
+
+                engine.renderer.sprites.resize_sprite_group(
+                    &engine.renderer.gpu,
+                    1,
+                    1,
+                );
+                engine.renderer.sprites.upload_sprites(
+                    &engine.renderer.gpu,
+                    1,
+                    0..1,
+                );
+                engine
+                    .renderer
+                    .sprites
+                    .set_camera_all(&engine.renderer.gpu, self.camera);
             }
             GameState::InGame => {
                 let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
