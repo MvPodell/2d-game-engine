@@ -11,23 +11,11 @@ const PAVEMENT_SPEED: f32 = -1.0;
 const SPRITE_MAX: usize = 1000;
 const COLLISION_DISTANCE: f32 = 22.0;
 const DROP_OFF_DIST: f32 = 75.0;
-// sound/audio --> use Kira
-// use kira::{
-//     manager::{
-//         AudioManager, AudioManagerSettings,
-//         backend::DefaultBackend,
-//     },
-//     sound::static_sound::{StaticSoundData, StaticSoundSettings},
-// };
-
 const COP_DISTANCE: f32 = 42.0;
 const COLLISION_STEPS: usize = 3;
 const GUY_Y_POS: f32 = 24.0;
 struct Guy {
     pos: Vec2,
-    is_jumping: bool,
-    jump_velocity: f32,
-    fwd_jump_frames: usize,
     is_visible: bool,
 }
 
@@ -110,9 +98,6 @@ impl engine::Game for Game {
                 x: 378.66,
                 y: GUY_Y_POS,
             },
-            is_jumping: false,
-            jump_velocity: 10.0,
-            fwd_jump_frames: 0,
             is_visible: true,
         };
         let cop = Guy {
@@ -120,9 +105,6 @@ impl engine::Game for Game {
                 x: 378.66,
                 y: -50.0,
             },
-            is_jumping: false,
-            jump_velocity: 10.0,
-            fwd_jump_frames: 0,
             is_visible: false,
         };
 
@@ -227,51 +209,15 @@ impl engine::Game for Game {
                 let possible_values = [261.33, 378.66, 496.0];
                 let side_values = [100.0, W-100.0];
 
-                // for jumping
-                if engine.input.is_key_pressed(engine::Key::Up) && !self.guy.is_jumping {
-                    println!("jump!");
-                    self.guy.is_jumping = true;
-                }
-
-                // track the number of frames the guy has been jumping for
-                if self.guy.is_jumping {
-                    self.guy.fwd_jump_frames += 1;
-
-                    // Continue the animation for 12 frames
-                    if self.guy.fwd_jump_frames <= 12 {
-                        // make the distance traveled between frames progressively less
-                        self.guy.pos.y += self.guy.jump_velocity;
-                        self.guy.jump_velocity -= 0.2;
-                    } else if self.guy.pos.y >= 50.0 {
-                        self.guy.pos.y -= 2.3;
-                    } else {
-                        // End the jumping animation
-                        self.guy.is_jumping = false;
-                        self.guy.fwd_jump_frames = 0;
-                        self.guy.pos.y = 50.0;
-                        self.guy.jump_velocity = 10.0;
-                    }
-
-                    if self.cop.is_visible && self.cop.fwd_jump_frames <= 100 {
-                        self.cop.fwd_jump_frames += 1;
-                    }
-
-                    if self.cop.fwd_jump_frames > 100 && self.cop.pos.y >= 0.0 {
-                        self.cop.pos.y -= 1.0;
-                    } else if self.cop.pos.y < 0.0 && self.cop.is_visible {
-                        // end cop visibility
-                        self.cop.fwd_jump_frames = 0;
-                        self.cop.is_visible = false;
-                        self.cop.pos.y = -50.0;
-                    }
-                }
-
                 // for continuous left or right movement
                 let dir = engine.input.key_axis(engine::Key::Left, engine::Key::Right);
                 self.guy.pos.x += dir * GUY_SPEED;
                 self.cop.pos.x += dir * GUY_SPEED;
 
-
+                // for continuous up or down movement
+                let dir = engine.input.key_axis(engine::Key::Down, engine::Key::Up);
+                self.guy.pos.y += dir * GUY_SPEED;
+                self.cop.pos.y += dir * GUY_SPEED;
 
                 let mut contacts = Vec::with_capacity(self.walls.len());
 
@@ -298,7 +244,6 @@ impl engine::Game for Game {
                             .unwrap()
                     });
                     for (wall_idx, _disp) in contacts.iter() {
-                        // TODO: for multiple guys should access self.guys[guy_idx].
                         let guy_aabb = SPRITE {
                             center: self.guy.pos,
                             size: Vec2 { x: 38.4, y: 65.33 },
@@ -373,31 +318,7 @@ impl engine::Game for Game {
                 for car in self.cars.iter_mut() {
                     car.pos += car.vel;
                 }
-                // if any car is within the catch distance of the guy, mark a collision
-                if !self.guy.is_jumping {
-                    if let Some(idx) = self
-                        .cars
-                        .iter()
-                        .position(|car| car.pos.distance(self.guy.pos) <= COLLISION_DISTANCE)
-                    {
-                        println!("Score: {}", self.score);
-                        self.game_over = true;
-                    } else if let Some(idx) = self
-                        .cars
-                        .iter()
-                        .position(|car| car.pos.distance(self.guy.pos) <= COP_DISTANCE)
-                    {
-                        println!("COP!");
-                        if !self.cop.is_visible {
-                            self.cop.is_visible = true;
-                            self.guy.pos.y = GUY_Y_POS + 100.0;
-                            self.cop.pos.y = GUY_Y_POS;
-                            // if the cop is already on the screen and it's been on the screen for more than the collision cooldown of 50 frames
-                        } else if self.cop.is_visible && self.cop.fwd_jump_frames > 50 {
-                            self.game_over = true;
-                        }
-                    }
-                }
+
                 // between frames, maintain all the cars on the screen that are above position -8.0
                 self.cars.retain(|car| car.pos.y > -8.0);
 
@@ -496,20 +417,6 @@ impl engine::Game for Game {
                 for coin in self.coins.iter_mut() {
                     coin.pos += coin.vel * self.coin_speed_multiplier;
                 }
-
-                // play coin collision sound
-                // Inside the section where you handle coin collisions
-                // if let Some(idx) = self
-                // .coins
-                // .iter()
-                // .position(|coin: &Sprite| coin.pos.distance(self.guy.pos) <= COLLISION_DISTANCE)
-                // {
-                // self.coins.swap_remove(idx);
-                // self.score += 1;
-
-                // // Play the coin collecting sound
-                // self.audio_state.audio_manager.play(&self.audio_state.coin_collect_sound, Default::default())?;
-                // }
             }
         }
     }
@@ -572,51 +479,49 @@ impl engine::Game for Game {
                 .into();
 
                 // animate the guy character
-                if !self.guy.is_jumping {
-                    let ones_place = self.curr_frame % 10;
-                    match ones_place {
-                        0 => {
-                            uvs[guy_idx] = SheetRegion::new(0, 100, 498, 1, 14, 18);
-                        }
-                        1 => {
-                            uvs[guy_idx] = SheetRegion::new(0, 114, 480, 1, 14, 18);
-                        }
-                        2 => {
-                            uvs[guy_idx] = SheetRegion::new(0, 114, 498, 1, 14, 18);
-                        }
-                        _ => {
-                            // for other cases, if they come up
-                        }
-                    }
-                }
-
-                // set cop
-                let cop_idx = guy_idx + 1;
-                transforms[cop_idx] = SPRITE {
-                    center: self.cop.pos,
-                    size: Vec2 { x: 38.4, y: 65.33 },
-                }
-                .into();
-
-                // animate the guy character
                 let ones_place = self.curr_frame % 10;
                 match ones_place {
                     0 => {
-                        uvs[cop_idx] = SheetRegion::new(0, 177, 498, 0, 14, 18);
+                        uvs[guy_idx] = SheetRegion::new(0, 100, 498, 1, 14, 18);
                     }
                     1 => {
-                        uvs[cop_idx] = SheetRegion::new(0, 191, 480, 0, 14, 18);
+                        uvs[guy_idx] = SheetRegion::new(0, 114, 480, 1, 14, 18);
                     }
                     2 => {
-                        uvs[cop_idx] = SheetRegion::new(0, 191, 498, 0, 14, 18);
+                        uvs[guy_idx] = SheetRegion::new(0, 114, 498, 1, 14, 18);
                     }
                     _ => {
                         // for other cases, if they come up
                     }
-                }
+                    }
+
+                // set cop
+                // let cop_idx = guy_idx + 1;
+                // transforms[cop_idx] = SPRITE {
+                //     center: self.cop.pos,
+                //     size: Vec2 { x: 38.4, y: 65.33 },
+                // }
+                // .into();
+
+                // animate the cop character
+                // let ones_place = self.curr_frame % 10;
+                // match ones_place {
+                //     0 => {
+                //         uvs[cop_idx] = SheetRegion::new(0, 177, 498, 0, 14, 18);
+                //     }
+                //     1 => {
+                //         uvs[cop_idx] = SheetRegion::new(0, 191, 480, 0, 14, 18);
+                //     }
+                //     2 => {
+                //         uvs[cop_idx] = SheetRegion::new(0, 191, 498, 0, 14, 18);
+                //     }
+                //     _ => {
+                //         // for other cases, if they come up
+                //     }
+                // }
 
                 // set pavement
-                let pavement_start = cop_idx + 1;
+                let pavement_start = guy_idx + 1;
                 for (pavement, (transform, uv)) in self.pavements.iter().zip(
                     transforms[pavement_start..]
                         .iter_mut()
