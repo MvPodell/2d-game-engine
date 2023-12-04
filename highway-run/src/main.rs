@@ -200,9 +200,9 @@ impl engine::Game for Game {
         // Create an audio manager
         let audio_manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
         // Load the drop sound
-        let drop_sound = StaticSoundData::from_file("../content/drop_off.mp3", StaticSoundSettings::default()).unwrap();
+        let drop_sound = StaticSoundData::from_file("../content/hotel-bell-ding.mp3", StaticSoundSettings::default()).unwrap();
         // Load the cat sound
-        let cat_sound = StaticSoundData::from_file("../content/cat_meow.wav", StaticSoundSettings::default()).unwrap();
+        let cat_sound = StaticSoundData::from_file("../content/angry_cat.mp3", StaticSoundSettings::default()).unwrap();
 
         Game {
             camera,
@@ -830,21 +830,21 @@ impl engine::Game for Game {
                 ) {
                     *transform = SPRITE {
                         center: building.pos,
-                        size: Vec2 { x: 33.0, y: 38.0 },
+                        size: Vec2 { x: 60.0, y: 80.0 },
                     }
                     .into();
                     match building.job {
                         Job::Firefighter => {
-                            *uv = SheetRegion::new(0, 100, 480, 1, 14, 18);
+                            *uv = SheetRegion::new(0, 132, 518, 1, 44, 42);
                         }
                         Job::Doctor => {
-                            *uv = SheetRegion::new(0, 100, 498, 1, 14, 17);
+                            *uv = SheetRegion::new(0, 212, 528, 1, 30, 30);
                         }
                         Job::Cop => {
-                            *uv = SheetRegion::new(0, 100, 516, 1, 14, 18);
+                            *uv = SheetRegion::new(0, 176, 530, 1, 30, 28);
                         }
                         Job::Regular => {
-                            *uv = SheetRegion::new(0, 100, 534, 1, 14, 18);
+                            *uv = SheetRegion::new(0, 97, 528, 1, 32, 33);
                         }
                         _ => {
                             // for other cases, if they come up
