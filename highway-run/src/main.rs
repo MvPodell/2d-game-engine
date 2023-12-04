@@ -429,6 +429,16 @@ impl engine::Game for Game {
                     person.pos += person.vel;
                 }
 
+                // Check collision with animals
+                if self
+                    .animals
+                    .iter()
+                    .any(|animal| animal.pos.distance(self.bus.pos) <= COLLISION_DISTANCE)
+                {
+                    println!("Game Over! Your final score: {}", self.score);
+                    self.game_over = true;
+                }
+
                 // if any person is within the catch distance of the bus, mark a collision
                 if self.on_bus.len() < 5 {
                     if let Some(idx) = self
