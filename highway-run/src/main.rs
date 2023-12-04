@@ -76,7 +76,7 @@ struct Animal {
 enum GameState {
     TitleScreen,
     InGame,
-    //GameOver, //eventually add the GameOver
+    GameOver, //eventually add the GameOver
 }
 
 struct Game {
@@ -95,6 +95,7 @@ struct Game {
     pavement_timer: u32,
     score: u32,
     font: engine::BitFont,
+    font_end: engine::BitFont,
     curr_frame: usize,
     frame_counter: usize,
     frame_direction: isize,
@@ -117,8 +118,8 @@ impl engine::Game for Game {
         #[cfg(not(target_arch = "wasm32"))]
         let start_img = image::open("../content/title_screen_game2.png").unwrap().into_rgba8();
         let start_tex = engine.renderer.gpu.create_texture(&start_img, wgpu::TextureFormat::Rgba8UnormSrgb, start_img.dimensions(), Some("start-sprite.png"),);
-        // let end_img = image::open("../content/end_screen_game2.png").unwrap().into_rgba8();
-        // let end_tex = engine.renderer.gpu.create_texture(&end_img, wgpu::TextureFormat::Rgba8UnormSrgb, end_img.dimensions(), Some("end-sprite.png"),);
+        let end_img = image::open("../content/end_screen_game2.png").unwrap().into_rgba8();
+        let end_tex = engine.renderer.gpu.create_texture(&end_img, wgpu::TextureFormat::Rgba8UnormSrgb, end_img.dimensions(), Some("end-sprite.png"),);
         // #[cfg(target_arch = "wasm32")]
 
         let sprite_img = image::open("../content/run-spritesheet.png")
@@ -145,6 +146,15 @@ impl engine::Game for Game {
             &engine.renderer.gpu,
             &start_tex,
             vec![Transform::zeroed(); 1],
+            vec![SheetRegion::zeroed(); 1],
+            camera,
+        );
+
+        // end sprite group
+        engine.renderer.sprites.add_sprite_group(
+            &engine.renderer.gpu,
+            &end_tex,
+            vec![Transform::zeroed(); 1], //bg, three walls, guy, a few cars
             vec![SheetRegion::zeroed(); 1],
             camera,
         );
@@ -177,6 +187,11 @@ impl engine::Game for Game {
         let font = engine::BitFont::with_sheet_region(
             '0'..='9',
             SheetRegion::new(0, 0, 512, 0, 80, 8),
+            10,
+        );
+        let font_end = engine::BitFont::with_sheet_region(
+            '0'..='9',
+            SheetRegion::new(0, 0, 866, 0, 80, 8),
             10,
         );
 
@@ -220,6 +235,7 @@ impl engine::Game for Game {
             pavement_timer: 0,
             score: 0,
             font,
+            font_end,
             curr_frame: 0,
             frame_counter: 0,
             frame_direction: 1,
@@ -435,9 +451,10 @@ impl engine::Game for Game {
                     .any(|animal| animal.pos.distance(self.bus.pos) <= COLLISION_DISTANCE)
                 {
                     // play cat sound
-                    self.audio_manager.play(self.cat_sound.clone()).unwrap(); 
+                    // self.audio_manager.play(self.cat_sound.clone()).unwrap(); 
                     println!("Game Over! Your final score: {}", self.score);
-                    self.game_over = true;
+                    engine.renderer.sprites.remove_sprite_group(0);
+                    self.game_state = GameState::GameOver;
                 }
 
                 // if any person is within the catch distance of the bus, mark a collision
@@ -587,6 +604,9 @@ impl engine::Game for Game {
                 for building in self.buildings.iter_mut() {
                     building.pos += building.vel * self.building_speed_multiplier;
                 }
+            }
+            GameState::GameOver => {
+                // hello
             }
         }
     }
@@ -908,6 +928,52 @@ impl engine::Game for Game {
                     &engine.renderer.gpu,
                     0,
                     0..sprite_count + text_len,
+                );
+                engine
+                    .renderer
+                    .sprites
+                    .set_camera_all(&engine.renderer.gpu, self.camera);
+            }
+            GameState::GameOver => {
+                // the end screen sprite group is now at index 0 after removing the first two groups
+                // self.audio_manager.play(self.cat_sound.clone()).unwrap(); 
+
+                let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
+                transforms[0] = SPRITE {
+                    center: Vec2 {
+                        x: W / 2.0,
+                        y: H / 2.0,
+                    },
+                    size: Vec2 { x: W, y: H-(H/4.0) },
+                }
+                .into();
+                uvs[0] = SheetRegion::new(0, 0, 0, 1, 768, 864); // Adjust UV coordinates if needed
+
+                let score_str = self.score.to_string();
+                let end_text_len = score_str.len();
+
+                self.font_end.draw_text(
+                    &mut engine.renderer.sprites,
+                    0,
+                    1,
+                    &score_str,
+                    Vec2 {
+                        x: (W / 2.0) + 60.0,
+                        y: (H / 2.0) + 50.0,
+                    }
+                    .into(),
+                    40.0,
+                );
+
+                engine.renderer.sprites.resize_sprite_group(
+                    &engine.renderer.gpu,
+                    0,
+                    1 + end_text_len,
+                );
+                engine.renderer.sprites.upload_sprites(
+                    &engine.renderer.gpu,
+                    0,
+                    0..1 + end_text_len,
                 );
                 engine
                     .renderer
