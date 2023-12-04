@@ -38,6 +38,11 @@ enum Job {
     Cop
 }
 
+enum CatDog {
+    Cat,
+    Dog,
+}
+
 impl fmt::Display for Job {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -61,6 +66,12 @@ struct Building {
     job: Job
 }
 
+struct Animal {
+    pos: Vec2,
+    vel: Vec2,
+    animal_type: CatDog,
+}
+
 
 enum GameState {
     TitleScreen,
@@ -72,7 +83,7 @@ struct Game {
     camera: engine::Camera,
     walls: Vec<SPRITE>,
     bus: Bus,
-    animals: Vec<Sprite>,
+    animals: Vec<Animal>,
     people: Vec<Person>,
     animal_timer: u32,
     people_timer: u32,
@@ -102,15 +113,13 @@ impl engine::Game for Game {
         #[cfg(target_arch = "wasm32")]
         let sprite_img = {
             let img_bytes = include_bytes!("../content/spritesheet.png");
-            let img_bytes = include_bytes!("../content/spritesheet2.png");
-            let img_bytes = include_bytes!("../content/spritesheet.png");
             image::load_from_memory_with_format(&img_bytes, image::ImageFormat::Png)
                 .map_err(|e| e.to_string())
                 .unwrap()
                 .into_rgba8()
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let sprite_img = image::open("../content/spritesheet.png")
+        let sprite_img = image::open("../content/run-spritesheet.png")
             .unwrap()
             .into_rgba8();
         let sprite_tex = engine.renderer.gpu.create_texture(
@@ -338,10 +347,15 @@ impl engine::Game for Game {
                                 .iter()
                                 .any(|building| new_animal_pos.distance(building.pos) <= COLLISION_DISTANCE);
                     }
-
-                    self.animals.push(Sprite {
+                    let generated_animal = match rand::thread_rng().gen_range(0..1) {
+                        0 => CatDog::Cat,
+                        1 => CatDog::Dog,
+                        _ => unreachable!(), // Should never happen, just to handle all cases
+                    };
+                    self.animals.push(Animal {
                         pos: new_animal_pos,
                         vel: Vec2 { x: 0.0, y: -2.0 },
+                        animal_type: generated_animal,
                     });
                     self.animal_timer = rng.gen_range(30..90);
                 }
@@ -355,8 +369,8 @@ impl engine::Game for Game {
                     .iter()
                     .position(|animal| animal.pos.distance(self.bus.pos) <= COLLISION_DISTANCE)
                 {
-                    // println!("Score: {}", self.score);
-                    // self.game_over = true;
+                    println!("Score: {}", self.score);
+                    self.game_over = true;
                 } 
                 
                 // between frames, maintain all the animals on the screen that are above position -8.0
@@ -423,7 +437,7 @@ impl engine::Game for Game {
                         self.people.swap_remove(idx);
                     }
                 }
-                
+                self.people.retain(|person| person.pos.y > -8.0);
                 // between frames, maintain all the animals on the screen that are above position -8.0
                 self.animals.retain(|animal| animal.pos.y > -8.0);
 
@@ -614,10 +628,10 @@ impl engine::Game for Game {
                 let ones_place = self.curr_frame % 10;
                 match ones_place {
                     0 => {
-                        uvs[bus_idx] = SheetRegion::new(0, 100, 498, 1, 14, 18);
+                        uvs[bus_idx] = SheetRegion::new(0, 100, 480, 1, 14, 18);
                     }
                     1 => {
-                        uvs[bus_idx] = SheetRegion::new(0, 114, 480, 1, 14, 18);
+                        uvs[bus_idx] = SheetRegion::new(0, 100, 498, 1, 14, 18);
                     }
                     2 => {
                         uvs[bus_idx] = SheetRegion::new(0, 114, 498, 1, 14, 18);
@@ -657,7 +671,17 @@ impl engine::Game for Game {
                         size: Vec2 { x: 38.4, y: 65.33 },
                     }
                     .into();
-                    *uv = SheetRegion::new(0, 27, 525, 3, 27, 32);
+                    match animal.animal_type {
+                        CatDog::Cat => {
+                            *uv = SheetRegion::new(0, 113, 564, 3, 27, 29);
+                        }
+                        CatDog::Dog => {
+                            *uv = SheetRegion::new(0, 146, 565, 3, 25, 27);
+                        }
+                        _ => {
+                            // other cases
+                        }
+                    }
                 }
 
                 // set people
@@ -673,21 +697,71 @@ impl engine::Game for Game {
                         size: Vec2 { x: 38.4, y: 65.33 },
                     }
                     .into();
+                    let ones_place = self.curr_frame % 10;
                     match person.job {
                         Job::Firefighter => {
-                            *uv = SheetRegion::new(0, 100, 480, 1, 14, 18);
+                            match ones_place {
+                                0 => {
+                                    *uv = SheetRegion::new(0, 134, 480, 0, 16, 19);
+                                }
+                                1 => {
+                                    *uv = SheetRegion::new(0, 134, 499, 0, 16, 19);
+                                }
+                                2 => {
+                                    *uv = SheetRegion::new(0, 150, 498, 0, 16, 19);
+                                }
+                                _ => {
+                                    // for other cases, if they come up
+                                }
+                            }
                         }
                         Job::Doctor => {
-                            *uv = SheetRegion::new(0, 100, 498, 1, 14, 18);
+                            match ones_place {
+                                0 => {
+                                    *uv = SheetRegion::new(0, 212, 480, 0, 14, 18);
+                                }
+                                1 => {
+                                    *uv = SheetRegion::new(0, 212, 497, 0, 14, 18);
+                                }
+                                2 => {
+                                    *uv = SheetRegion::new(0, 226, 497, 0, 14, 18);
+                                }
+                                _ => {
+                                    // for other cases, if they come up
+                                }
+                            }
                         }
                         Job::Cop => {
-                            *uv = SheetRegion::new(0, 100, 516, 1, 14, 18);
+                            match ones_place {
+                                0 => {
+                                    *uv = SheetRegion::new(0, 177, 480, 0, 14, 18);
+                                }
+                                1 => {
+                                    *uv = SheetRegion::new(0, 191, 498, 0, 14, 18);
+                                }
+                                2 => {
+                                    *uv = SheetRegion::new(0, 177, 498, 0, 14, 18);
+                                }
+                                _ => {
+                                    // for other cases, if they come up
+                                }
+                            }   
                         }
                         Job::Regular => {
-                            *uv = SheetRegion::new(0, 100, 534, 1, 14, 18);
-                        }
-                        _ => {
-                            // for other cases, if they come up
+                            match ones_place {
+                                0 => {
+                                    *uv = SheetRegion::new(0, 100, 480, 1, 14, 18);
+                                }
+                                1 => {
+                                    *uv = SheetRegion::new(0, 100, 498, 1, 14, 18);
+                                }
+                                2 => {
+                                    *uv = SheetRegion::new(0, 114, 498, 1, 14, 18);
+                                }
+                                _ => {
+                                    // for other cases, if they come up
+                                }
+                            }
                         }
                     }
                 }
