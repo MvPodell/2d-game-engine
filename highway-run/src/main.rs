@@ -235,6 +235,7 @@ impl engine::Game for Game {
             GameState::TitleScreen => {
                 // Check if the space bar is pressed
                 if engine.input.is_key_pressed(engine::Key::Space) {
+                    engine.renderer.sprites.remove_sprite_group(1);
                     // Transition to the in-game state
                     self.game_state = GameState::InGame;
                 }
@@ -576,17 +577,6 @@ impl engine::Game for Game {
         }
     }
     fn render(&mut self, engine: &mut Engine) {
-        let score_str = self.score.to_string();
-        let text_len = score_str.len();
-
-        let sprite_count = 
-            self.walls.len() + self.pavements.len() + self.animals.len() + self.people.len() + self.buildings.len() + self.on_bus.len() + 4;
-
-        engine.renderer.sprites.resize_sprite_group(
-            &engine.renderer.gpu,
-            0,
-            sprite_count + text_len,
-        );
 
         match self.game_state {
             GameState::TitleScreen => {
@@ -617,6 +607,19 @@ impl engine::Game for Game {
                     .set_camera_all(&engine.renderer.gpu, self.camera);
             }
             GameState::InGame => {
+                let score_str = self.score.to_string();
+                let text_len = score_str.len();
+
+                let sprite_count = 
+                    self.walls.len() + self.pavements.len() + self.animals.len() + self.people.len() + self.buildings.len() + self.on_bus.len() + 4;
+
+                engine.renderer.sprites.resize_sprite_group(
+                    &engine.renderer.gpu,
+                    0,
+                    sprite_count + text_len,
+                );
+
+
                 let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
 
                 // set bg image
