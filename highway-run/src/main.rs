@@ -659,12 +659,12 @@ impl engine::Game for Game {
                 transforms[frame_start] = SPRITE {
                     center: Vec2 {
                         x: W - 40.0,
-                        y: H - 144.0,
+                        y: H - 300.0,
                     },
-                    size: Vec2 { x: 60.0, y: 190.0 },
+                    size: Vec2 { x: 60.0, y: 500.0 },
                 }
                 .into();
-                uvs[frame_start] = SheetRegion::new(0, 312, 501, 1, 40, 134);
+                uvs[frame_start] = SheetRegion::new(0, 312, 501, 1, 40, 309);
 
 
                 // set bus
@@ -769,13 +769,13 @@ impl engine::Game for Game {
                         Job::Doctor => {
                             match ones_place {
                                 0 => {
-                                    *uv = SheetRegion::new(0, 212, 480, 0, 14, 18);
+                                    *uv = SheetRegion::new(0, 212, 480, 0, 14, 17);
                                 }
                                 1 => {
-                                    *uv = SheetRegion::new(0, 212, 497, 0, 14, 18);
+                                    *uv = SheetRegion::new(0, 212, 497, 0, 14, 17);
                                 }
                                 2 => {
-                                    *uv = SheetRegion::new(0, 226, 497, 0, 14, 18);
+                                    *uv = SheetRegion::new(0, 226, 497, 0, 14, 17);
                                 }
                                 _ => {
                                     // for other cases, if they come up
@@ -834,7 +834,7 @@ impl engine::Game for Game {
                             *uv = SheetRegion::new(0, 100, 480, 1, 14, 18);
                         }
                         Job::Doctor => {
-                            *uv = SheetRegion::new(0, 100, 498, 1, 14, 18);
+                            *uv = SheetRegion::new(0, 100, 498, 1, 14, 17);
                         }
                         Job::Cop => {
                             *uv = SheetRegion::new(0, 100, 516, 1, 14, 18);
@@ -849,7 +849,7 @@ impl engine::Game for Game {
                 }
 
                 let on_bus_start = building_start + self.buildings.len();
-                let bus_seats = vec![ H-100.0, H-180.0, H-260.0, H-340.0, H-420.0 ];
+                let bus_seats = vec![ H-120.0, H-210.0, H-300.0, H-390.0, H-480.0 ];
                 for (index, (person_on_bus, (transform, uv))) in self.on_bus.iter().zip(
                     transforms[on_bus_start..]
                         .iter_mut()
@@ -865,7 +865,7 @@ impl engine::Game for Game {
                             *uv = SheetRegion::new(0, 134, 480, 0, 16, 19);
                         }
                         Job::Doctor => {
-                            *uv = SheetRegion::new(0, 212, 480, 0, 14, 18);
+                            *uv = SheetRegion::new(0, 212, 480, 0, 14, 17);
                         }
                         Job::Cop => {
                             *uv = SheetRegion::new(0, 177, 480, 0, 14, 18);
