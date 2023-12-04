@@ -4,6 +4,8 @@ use engine;
 use engine::wgpu;
 use engine::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
 use rand::{distributions::Uniform, Rng};
+use std::fmt;
+
 const W: f32 = 768.0;
 const H: f32 = 1280.0;
 const GUY_SPEED: f32 = 4.0;
@@ -14,9 +16,8 @@ const DROP_OFF_DIST: f32 = 75.0;
 const COP_DISTANCE: f32 = 42.0;
 const COLLISION_STEPS: usize = 3;
 const GUY_Y_POS: f32 = 24.0;
-struct Guy {
+struct Bus {
     pos: Vec2,
-    is_visible: bool,
 }
 
 struct Sprite {
@@ -25,9 +26,41 @@ struct Sprite {
 }
 
 // struct AudioState {
-//     coin_collect_sound: StaticSoundData,
+//     building_collect_sound: StaticSoundData,
 //     audio_manager: AudioManager<DefaultBackend>,
 // }
+
+#[derive(PartialEq, Debug, Clone)]
+enum Job {
+    Doctor,
+    Firefighter,
+    Regular,
+    Cop
+}
+
+impl fmt::Display for Job {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Job::Firefighter => write!(f, "Firefighter"),
+            Job::Doctor => write!(f, "Doctor"),
+            Job::Regular => write!(f, "Regular"),
+            Job::Cop => write!(f, "Cop"),
+        }
+    }
+}
+
+struct Person {
+    pos: Vec2,
+    vel: Vec2,
+    job: Job
+}
+
+struct Building {
+    pos: Vec2,
+    vel: Vec2,
+    job: Job
+}
+
 
 enum GameState {
     TitleScreen,
@@ -38,14 +71,15 @@ enum GameState {
 struct Game {
     camera: engine::Camera,
     walls: Vec<SPRITE>,
-    guy: Guy,
-    cop: Guy,
-    cars: Vec<Sprite>,
-    car_timer: u32,
-    car_speed_multiplier: f32,
-    coin_speed_multiplier: f32,
-    coins: Vec<Sprite>,
-    coin_timer: u32,
+    bus: Bus,
+    animals: Vec<Sprite>,
+    people: Vec<Person>,
+    animal_timer: u32,
+    people_timer: u32,
+    animal_speed_multiplier: f32,
+    building_speed_multiplier: f32,
+    buildings: Vec<Building>,
+    building_timer: u32,
     pavements: Vec<Sprite>,
     pavement_timer: u32,
     score: u32,
@@ -55,6 +89,7 @@ struct Game {
     frame_direction: isize,
     game_over: bool,
     game_state: GameState,
+    on_bus: Vec<Person>,
 }
 
 impl engine::Game for Game {
@@ -89,23 +124,15 @@ impl engine::Game for Game {
             &engine.renderer.gpu,
             &sprite_tex,
             // &title_screen_tex,
-            vec![Transform::zeroed(); SPRITE_MAX], //bg, three walls, guy, a few cars
+            vec![Transform::zeroed(); SPRITE_MAX], //bg, three walls, bus, a few animals
             vec![SheetRegion::zeroed(); SPRITE_MAX],
             camera,
         );
-        let guy = Guy {
+        let bus = Bus {
             pos: Vec2 {
                 x: 378.66,
                 y: GUY_Y_POS,
             },
-            is_visible: true,
-        };
-        let cop = Guy {
-            pos: Vec2 {
-                x: 378.66,
-                y: -50.0,
-            },
-            is_visible: false,
         };
 
         let floor = SPRITE {
@@ -143,28 +170,31 @@ impl engine::Game for Game {
             pos: Vec2 { x: 2.0, y: 0.0 },
             vel: Vec2 { x: 0.0, y: -1.0 },
         });
-        let car_speed_multiplier = 1.0;
-        let coin_speed_multiplier = 1.0;
+        let animal_speed_multiplier = 1.0;
+        let building_speed_multiplier = 1.0;
+
+        let on_bus: Vec<Person> = Vec::with_capacity(5);
 
         // let mut audio_manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default())?;
-        // let coin_collect_sound = StaticSoundData::from_file("/Users/rachelyang/game-engine-2d/content/coin.mp3", StaticSoundSettings::default())?;
+        // let building_collect_sound = StaticSoundData::from_file("/Users/rachelyang/game-engine-2d/content/building.mp3", StaticSoundSettings::default())?;
 
         // let audio_state = AudioState {
-        //     coin_collect_sound,
+        //     building_collect_sound,
         //     audio_manager,
         // };
 
         Game {
             camera,
-            guy,
-            cop,
+            bus,
             walls: vec![left_wall, right_wall, floor],
-            cars: Vec::with_capacity(8),
-            car_timer: 0,
-            coins: Vec::with_capacity(33),
-            coin_timer: 0,
-            car_speed_multiplier,
-            coin_speed_multiplier,
+            animals: Vec::with_capacity(8),
+            people: Vec::with_capacity(30),
+            animal_timer: 0,
+            people_timer: 0,
+            buildings: Vec::with_capacity(33),
+            building_timer: 0,
+            animal_speed_multiplier,
+            building_speed_multiplier,
             pavements,
             pavement_timer: 0,
             score: 0,
@@ -175,6 +205,7 @@ impl engine::Game for Game {
             game_over: false,
             // audio_state: AudioState,
             game_state: GameState::TitleScreen,
+            on_bus,
         }
     }
 
@@ -194,7 +225,7 @@ impl engine::Game for Game {
 
             GameState::InGame => {
                 let mut now = std::time::Instant::now();
-                // set the speed of animation for guy. Adjust number after modulo.
+                // set the speed of animation for bus. Adjust number after modulo.
                 self.frame_counter = (self.frame_counter + 1) % 5;
                 if self.frame_counter == 0 {
                     // Update the current frame based on the direction
@@ -211,19 +242,18 @@ impl engine::Game for Game {
 
                 // for continuous left or right movement
                 let dir = engine.input.key_axis(engine::Key::Left, engine::Key::Right);
-                self.guy.pos.x += dir * GUY_SPEED;
-                self.cop.pos.x += dir * GUY_SPEED;
+                self.bus.pos.x += dir * GUY_SPEED;
 
                 // for continuous up or down movement
                 let dir = engine.input.key_axis(engine::Key::Down, engine::Key::Up);
-                self.guy.pos.y += dir * GUY_SPEED;
-                self.cop.pos.y += dir * GUY_SPEED;
+                self.bus.pos.y += dir * GUY_SPEED;
+                self.bus.pos.y += dir * GUY_SPEED;
 
                 let mut contacts = Vec::with_capacity(self.walls.len());
 
                 for _iter in 0..COLLISION_STEPS {
-                    let guy_sprite = SPRITE {
-                        center: self.guy.pos,
+                    let bus_sprite = SPRITE {
+                        center: self.bus.pos,
                         size: Vec2 { x: 38.4, y: 65.33 },
                     };
                     contacts.clear();
@@ -232,7 +262,7 @@ impl engine::Game for Game {
                         self.walls
                             .iter()
                             .enumerate()
-                            .filter_map(|(ri, w)| w.displacement(guy_sprite).map(|d| (ri, d))),
+                            .filter_map(|(ri, w)| w.displacement(bus_sprite).map(|d| (ri, d))),
                     );
                     if contacts.is_empty() {
                         break;
@@ -244,131 +274,233 @@ impl engine::Game for Game {
                             .unwrap()
                     });
                     for (wall_idx, _disp) in contacts.iter() {
-                        let guy_aabb = SPRITE {
-                            center: self.guy.pos,
+                        // TODO: for multiple buss should access self.buss[bus_idx].
+                        let bus_aabb = SPRITE {
+                            center: self.bus.pos,
                             size: Vec2 { x: 38.4, y: 65.33 },
                         };
                         let wall = self.walls[*wall_idx];
-                        let mut disp = wall.displacement(guy_sprite).unwrap_or(Vec2::ZERO);
+                        let mut disp = wall.displacement(bus_sprite).unwrap_or(Vec2::ZERO);
                         // We got to a basically zero collision amount
                         if disp.x.abs() < std::f32::EPSILON || disp.y.abs() < std::f32::EPSILON {
                             break;
                         }
-                        // Guy is left of wall, push left
-                        if self.guy.pos.x < wall.center.x {
+                        // bus is left of wall, push left
+                        if self.bus.pos.x < wall.center.x {
                             disp.x *= -1.0;
                         }
-                        // Guy is below wall, push down
-                        if self.guy.pos.y < wall.center.y {
+                        // bus is below wall, push down
+                        if self.bus.pos.y < wall.center.y {
                             disp.y *= -1.0;
                         }
                         if disp.x.abs() <= disp.y.abs() {
-                            self.guy.pos.x += disp.x;
-                            // so far it seems resolved; for multiple guys this should probably set a flag on the guy
+                            self.bus.pos.x += disp.x;
+                            // so far it seems resolved; for multiple buss this should probably set a flag on the bus
                         } else if disp.y.abs() <= disp.x.abs() {
-                            self.guy.pos.y += disp.y;
-                            // so far it seems resolved; for multiple guys this should probably set a flag on the guy
+                            self.bus.pos.y += disp.y;
+                            // so far it seems resolved; for multiple buss this should probably set a flag on the bus
                         }
                     }
                 }
                 let mut rng = rand::thread_rng();
 
-                // create columns for cars
+                // create columns for animals
                 let uniform = Uniform::new(0, possible_values.len());
                 let random_index = rng.sample(uniform);
                 let random_value = possible_values[random_index];
 
-                // create columns for coins
-                let uniform_coins = Uniform::new(0, side_values.len());
-                let random_index_coins = rng.sample(uniform_coins);
-                let random_value_coins = side_values[random_index_coins];
+                // create columns for buildings
+                let uniform_buildings = Uniform::new(0, side_values.len());
+                let random_index_buildings = rng.sample(uniform_buildings);
+                let random_value_buildings = side_values[random_index_buildings];
 
-                // spawn new cars
-                if self.car_timer > 0 {
-                    self.car_timer -= 1;
-                } else if self.cars.len() < 32 {
+                // spawn new animals
+                if self.animal_timer > 0 {
+                    self.animal_timer -= 1;
+                } else if self.animals.len() < 32 {
                     let mut valid_position = false;
-                    let mut new_car_pos = Vec2::default();
+                    let mut new_animal_pos = Vec2::default();
                     while !valid_position {
                         let uniform = Uniform::new(0, possible_values.len());
                         let random_index = rng.sample(uniform);
-                        new_car_pos = Vec2 {
+                        new_animal_pos = Vec2 {
                             x: possible_values[random_index],
                             y: H + 8.0,
                         };
 
-                        // Check if the new position overlaps with existing cars
+                        // Check if the new position overlaps with existing animals
                         valid_position = !self
-                            .cars
+                            .animals
                             .iter()
-                            .any(|car| new_car_pos.distance(car.pos) <= COLLISION_DISTANCE)
+                            .any(|animal| new_animal_pos.distance(animal.pos) <= COLLISION_DISTANCE)
                             && !self
-                                .coins
+                                .buildings
                                 .iter()
-                                .any(|coin| new_car_pos.distance(coin.pos) <= COLLISION_DISTANCE);
+                                .any(|building| new_animal_pos.distance(building.pos) <= COLLISION_DISTANCE);
                     }
 
-                    self.cars.push(Sprite {
-                        pos: new_car_pos,
+                    self.animals.push(Sprite {
+                        pos: new_animal_pos,
                         vel: Vec2 { x: 0.0, y: -2.0 },
                     });
-                    self.car_timer = rng.gen_range(30..90);
+                    self.animal_timer = rng.gen_range(30..90);
                 }
-                // update car velocities every frame
-                for car in self.cars.iter_mut() {
-                    car.pos += car.vel;
+                // update animal velocities every frame
+                for animal in self.animals.iter_mut() {
+                    animal.pos += animal.vel;
                 }
-
-                // between frames, maintain all the cars on the screen that are above position -8.0
-                self.cars.retain(|car| car.pos.y > -8.0);
-
-                // if a coin is within the catch distance, add one to the score
+                // if any cat/dog is within the catch distance of the bus, mark a collision
                 if let Some(idx) = self
-                    .coins
+                    .animals
                     .iter()
-                    .position(|coin: &Sprite| coin.pos.distance(self.guy.pos) <= DROP_OFF_DIST)
+                    .position(|animal| animal.pos.distance(self.bus.pos) <= COLLISION_DISTANCE)
                 {
-                    self.coins.swap_remove(idx);
-                    self.score += 1
-                }
+                    // println!("Score: {}", self.score);
+                    // self.game_over = true;
+                } 
+                
+                // between frames, maintain all the animals on the screen that are above position -8.0
+                self.animals.retain(|animal| animal.pos.y > -8.0);
 
-                // self.coins.retain(|coin| coin.pos.y > -8.0);
-
-                // Spawn new coins
-                if self.coin_timer > 0 {
-                    self.coin_timer -= 1;
-                } else if self.coins.len() < 32 {
+                // spawn new people
+                if self.people_timer > 0 {
+                    self.people_timer -= 1;
+                } else if self.people.len() < 5 {
                     let mut valid_position = false;
-                    let mut new_coin_pos = Vec2::default();
+                    let mut new_person_pos = Vec2::default();
                     while !valid_position {
-                        let uniform_coin = Uniform::new(0, side_values.len());
-                        let random_index_coin = rng.sample(uniform_coin);
-                        new_coin_pos = Vec2 {
-                            x: side_values[random_index_coin],
+                        let uniform = Uniform::new(0, possible_values.len());
+                        let random_index = rng.sample(uniform);
+                        new_person_pos = Vec2 {
+                            x: possible_values[random_index],
                             y: H + 8.0,
                         };
 
-                        // Check if the new position overlaps with existing cars or coins
+                        // Check if the new position overlaps with existing animals
                         valid_position = !self
-                            .cars
+                            .animals
                             .iter()
-                            .any(|car| new_coin_pos.distance(car.pos) <= COLLISION_DISTANCE)
+                            .any(|animal| new_person_pos.distance(animal.pos) <= COLLISION_DISTANCE)
                             && !self
-                                .coins
+                                .buildings
                                 .iter()
-                                .any(|coin| new_coin_pos.distance(coin.pos) <= COLLISION_DISTANCE);
+                                .any(|building| new_person_pos.distance(building.pos) <= COLLISION_DISTANCE);
                     }
-                    self.coins.push(Sprite {
-                        pos: new_coin_pos,
+                    // TODO: generate a random job
+                    let generated_job = match rand::thread_rng().gen_range(0..4) {
+                        0 => Job::Doctor,
+                        1 => Job::Firefighter,
+                        2 => Job::Regular,
+                        3 => Job::Cop,
+                        _ => unreachable!(), // Should never happen, just to handle all cases
+                    };
+
+                    self.people.push(Person {
+                        pos: new_person_pos,
                         vel: Vec2 { x: 0.0, y: -2.0 },
+                        job: generated_job,
                     });
-                    self.coin_timer = rng.gen_range(30..90);
+                    self.people_timer = rng.gen_range(30..180);
                 }
-                // Update coins
-                for coin in self.coins.iter_mut() {
-                    coin.pos += coin.vel;
+                // update people velocities every frame
+                for person in self.people.iter_mut() {
+                    person.pos += person.vel;
                 }
-                self.coins.retain(|coin| coin.pos.y > -8.0);
+
+                // if any person is within the catch distance of the bus, mark a collision
+                if self.on_bus.len() < 5 {
+                    if let Some(idx) = self
+                    .people
+                    .iter()
+                    .position(|person| person.pos.distance(self.bus.pos) <= COLLISION_DISTANCE)
+                    {
+                        self.on_bus.push(Person {
+                            pos: Vec2 {x: 0.0, y: 0.0},
+                            vel: Vec2 {x: 0.0, y: 0.0},
+                            job: self.people[idx].job.clone(),
+                        });
+                        println!("On Bus: {}", self.on_bus.len());
+                        self.people.swap_remove(idx);
+                    }
+                }
+                
+                // between frames, maintain all the animals on the screen that are above position -8.0
+                self.animals.retain(|animal| animal.pos.y > -8.0);
+
+
+                // if a building is within the catch distance, check if the job of the building matches the job of a person on the bus
+                if let Some(idx) = self
+                    .buildings
+                    .iter()
+                    .position(|building: &Building| building.pos.distance(self.bus.pos) <= DROP_OFF_DIST)
+                {
+                    let curr_building = &self.buildings[idx].job;
+
+                    // // Retain only the buildings that do not match the job of a person on the bus
+                    // self.buildings.retain(|building| !self.on_bus.iter().any(|person| person.job == building.job));
+
+                    // remove person from the bus if dropped off
+                    if self.on_bus.iter().any(|person| person.job == self.buildings[idx].job) {
+                        self.buildings.swap_remove(idx);
+                        if let Some(person_idx) = self
+                            .on_bus
+                            .iter()
+                            .position(|person| person.job == self.buildings[idx].job)
+                        {
+                            println!("Removed a {} from the bus!", self.buildings[idx].job);
+                            self.on_bus.swap_remove(person_idx);
+                            println!("number of people on bus: {}", self.on_bus.len());
+                            self.score += 1;
+                        }
+                    }
+                    // println!("building job: {}", self.buildings[idx].job);
+                }
+
+                self.buildings.retain(|building| building.pos.y > -8.0);
+
+                // Spawn new buildings
+                if self.building_timer > 0 {
+                    self.building_timer -= 1;
+                } else if self.buildings.len() < 32 {
+                    let mut valid_position = false;
+                    let mut new_building_pos = Vec2::default();
+                    while !valid_position {
+                        let uniform_building = Uniform::new(0, side_values.len());
+                        let random_index_building = rng.sample(uniform_building);
+                        new_building_pos = Vec2 {
+                            x: side_values[random_index_building],
+                            y: H + 8.0,
+                        };
+
+                        // Check if the new position overlaps with existing animals or buildings
+                        valid_position = !self
+                            .animals
+                            .iter()
+                            .any(|animal| new_building_pos.distance(animal.pos) <= COLLISION_DISTANCE)
+                            && !self
+                                .buildings
+                                .iter()
+                                .any(|building| new_building_pos.distance(building.pos) <= COLLISION_DISTANCE);
+                    }
+                    let generated_job = match rand::thread_rng().gen_range(0..4) {
+                        0 => Job::Doctor,
+                        1 => Job::Firefighter,
+                        2 => Job::Regular,
+                        3 => Job::Cop,
+                        _ => unreachable!(), // Should never happen, just to handle all cases
+                    };
+                    self.buildings.push(Building {
+                        pos: new_building_pos,
+                        vel: Vec2 { x: 0.0, y: -2.0 },
+                        job: generated_job,
+                    });
+                    self.building_timer = rng.gen_range(30..90);
+                }
+                // Update buildings
+                for building in self.buildings.iter_mut() {
+                    building.pos += building.vel;
+                }
+                self.buildings.retain(|building| building.pos.y > -8.0);
 
                 // Spawn new pavements
                 if self.pavement_timer > 0 {
@@ -405,17 +537,17 @@ impl engine::Game for Game {
                 self.pavements.retain(|pavement| pavement.pos.y > -H / 2.0);
 
                 // Increase speed multipliers over time
-                self.car_speed_multiplier += 0.001 * acc;
-                self.coin_speed_multiplier += 0.001 * acc;
+                self.animal_speed_multiplier += 0.001 * acc;
+                self.building_speed_multiplier += 0.001 * acc;
 
-                // Update cars with increased speed
-                for car in self.cars.iter_mut() {
-                    car.pos += car.vel * self.car_speed_multiplier;
+                // Update animals with increased speed
+                for animal in self.animals.iter_mut() {
+                    animal.pos += animal.vel * self.animal_speed_multiplier;
                 }
 
-                // Update coins with increased speed
-                for coin in self.coins.iter_mut() {
-                    coin.pos += coin.vel * self.coin_speed_multiplier;
+                // Update buildings with increased speed
+                for building in self.buildings.iter_mut() {
+                    building.pos += building.vel * self.building_speed_multiplier;
                 }
             }
         }
@@ -425,7 +557,7 @@ impl engine::Game for Game {
         let text_len = score_str.len();
 
         let sprite_count =
-            self.walls.len() + self.pavements.len() + self.cars.len() + self.coins.len() + 3;
+            self.walls.len() + self.pavements.len() + self.animals.len() + self.people.len() + self.buildings.len() + 3;
 
         engine.renderer.sprites.resize_sprite_group(
             &engine.renderer.gpu,
@@ -462,66 +594,43 @@ impl engine::Game for Game {
 
                 // set walls
                 const WALL_START: usize = 1;
-                let guy_idx = WALL_START + self.walls.len();
+                let bus_idx = WALL_START + self.walls.len();
                 for (wall, (transform, uv)) in self.walls.iter().zip(
-                    transforms[WALL_START..guy_idx]
+                    transforms[WALL_START..bus_idx]
                         .iter_mut()
-                        .zip(uvs[WALL_START..guy_idx].iter_mut()),
+                        .zip(uvs[WALL_START..bus_idx].iter_mut()),
                 ) {
                     *transform = (*wall).into();
                     *uv = SheetRegion::new(0, 0, 480, 12, 8, 8);
                 }
-                // set guy
-                transforms[guy_idx] = SPRITE {
-                    center: self.guy.pos,
+                // set bus
+                transforms[bus_idx] = SPRITE {
+                    center: self.bus.pos,
                     size: Vec2 { x: 38.4, y: 65.33 },
                 }
                 .into();
 
-                // animate the guy character
+                // animate the bus character
                 let ones_place = self.curr_frame % 10;
                 match ones_place {
                     0 => {
-                        uvs[guy_idx] = SheetRegion::new(0, 100, 498, 1, 14, 18);
+                        uvs[bus_idx] = SheetRegion::new(0, 100, 498, 1, 14, 18);
                     }
                     1 => {
-                        uvs[guy_idx] = SheetRegion::new(0, 114, 480, 1, 14, 18);
+                        uvs[bus_idx] = SheetRegion::new(0, 114, 480, 1, 14, 18);
                     }
                     2 => {
-                        uvs[guy_idx] = SheetRegion::new(0, 114, 498, 1, 14, 18);
+                        uvs[bus_idx] = SheetRegion::new(0, 114, 498, 1, 14, 18);
                     }
                     _ => {
                         // for other cases, if they come up
                     }
-                    }
+                }
 
-                // set cop
-                // let cop_idx = guy_idx + 1;
-                // transforms[cop_idx] = SPRITE {
-                //     center: self.cop.pos,
-                //     size: Vec2 { x: 38.4, y: 65.33 },
-                // }
-                // .into();
-
-                // animate the cop character
-                // let ones_place = self.curr_frame % 10;
-                // match ones_place {
-                //     0 => {
-                //         uvs[cop_idx] = SheetRegion::new(0, 177, 498, 0, 14, 18);
-                //     }
-                //     1 => {
-                //         uvs[cop_idx] = SheetRegion::new(0, 191, 480, 0, 14, 18);
-                //     }
-                //     2 => {
-                //         uvs[cop_idx] = SheetRegion::new(0, 191, 498, 0, 14, 18);
-                //     }
-                //     _ => {
-                //         // for other cases, if they come up
-                //     }
-                // }
+        
 
                 // set pavement
-                let pavement_start = guy_idx + 1;
+                let pavement_start = bus_idx + 1;
                 for (pavement, (transform, uv)) in self.pavements.iter().zip(
                     transforms[pavement_start..]
                         .iter_mut()
@@ -535,38 +644,86 @@ impl engine::Game for Game {
                     *uv = SheetRegion::new(0, 640, 0, 5, 45, 748);
                 }
 
-                // set car
-                let car_start = pavement_start + self.pavements.len();
+                // set animal
+                let animal_start = pavement_start + self.pavements.len();
 
-                for (car, (transform, uv)) in self.cars.iter().zip(
-                    transforms[car_start..]
+                for (animal, (transform, uv)) in self.animals.iter().zip(
+                    transforms[animal_start..]
                         .iter_mut()
-                        .zip(uvs[car_start..].iter_mut()),
+                        .zip(uvs[animal_start..].iter_mut()),
                 ) {
                     *transform = SPRITE {
-                        center: car.pos,
+                        center: animal.pos,
                         size: Vec2 { x: 38.4, y: 65.33 },
                     }
                     .into();
                     *uv = SheetRegion::new(0, 27, 525, 3, 27, 32);
                 }
 
-                // set coin
-                let coin_start = car_start + self.cars.len();
-                for (coin, (transform, uv)) in self.coins.iter().zip(
-                    transforms[coin_start..]
+                // set people
+                let people_start = animal_start + self.animals.len();
+
+                for (person, (transform, uv)) in self.people.iter().zip(
+                    transforms[people_start..]
                         .iter_mut()
-                        .zip(uvs[coin_start..].iter_mut()),
+                        .zip(uvs[people_start..].iter_mut()),
                 ) {
                     *transform = SPRITE {
-                        center: coin.pos,
+                        center: person.pos,
+                        size: Vec2 { x: 38.4, y: 65.33 },
+                    }
+                    .into();
+                    match person.job {
+                        Job::Firefighter => {
+                            *uv = SheetRegion::new(0, 100, 480, 1, 14, 18);
+                        }
+                        Job::Doctor => {
+                            *uv = SheetRegion::new(0, 100, 498, 1, 14, 18);
+                        }
+                        Job::Cop => {
+                            *uv = SheetRegion::new(0, 100, 516, 1, 14, 18);
+                        }
+                        Job::Regular => {
+                            *uv = SheetRegion::new(0, 100, 534, 1, 14, 18);
+                        }
+                        _ => {
+                            // for other cases, if they come up
+                        }
+                    }
+                }
+
+                // set building
+                let building_start = people_start + self.people.len();
+                for (building, (transform, uv)) in self.buildings.iter().zip(
+                    transforms[building_start..]
+                        .iter_mut()
+                        .zip(uvs[building_start..].iter_mut()),
+                ) {
+                    *transform = SPRITE {
+                        center: building.pos,
                         size: Vec2 { x: 33.0, y: 38.0 },
                     }
                     .into();
-                    *uv = SheetRegion::new(0, 20, 480, 2, 16, 16);
+                    match building.job {
+                        Job::Firefighter => {
+                            *uv = SheetRegion::new(0, 100, 480, 1, 14, 18);
+                        }
+                        Job::Doctor => {
+                            *uv = SheetRegion::new(0, 100, 498, 1, 14, 18);
+                        }
+                        Job::Cop => {
+                            *uv = SheetRegion::new(0, 100, 516, 1, 14, 18);
+                        }
+                        Job::Regular => {
+                            *uv = SheetRegion::new(0, 100, 534, 1, 14, 18);
+                        }
+                        _ => {
+                            // for other cases, if they come up
+                        }
+                    }
                 }
 
-                let sprite_count = coin_start + self.coins.len();
+                let sprite_count = building_start + self.buildings.len();
 
                 self.font.draw_text(
                     &mut engine.renderer.sprites,
@@ -580,7 +737,7 @@ impl engine::Game for Game {
                     .into(),
                     16.0,
                 );
-                let text_start = coin_start + self.coins.len();
+                let text_start = building_start + self.buildings.len();
                 engine.renderer.sprites.resize_sprite_group(
                     &engine.renderer.gpu,
                     0,
