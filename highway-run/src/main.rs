@@ -235,6 +235,7 @@ impl engine::Game for Game {
             GameState::TitleScreen => {
                 // Check if the space bar is pressed
                 if engine.input.is_key_pressed(engine::Key::Space) {
+                    engine.renderer.sprites.remove_sprite_group(1);
                     // Transition to the in-game state
                     self.game_state = GameState::InGame;
                 }
@@ -460,7 +461,7 @@ impl engine::Game for Game {
                 self.animals.retain(|animal| animal.pos.y > -8.0);
 
 
-                // if a building is within the catch distance, check if the job of the building matches the job of a person on the bus
+                // if a building is within the catch distance, 
                 if let Some(idx) = self
                     .buildings
                     .iter()
@@ -471,9 +472,9 @@ impl engine::Game for Game {
                     // // Retain only the buildings that do not match the job of a person on the bus
                     // self.buildings.retain(|building| !self.on_bus.iter().any(|person| person.job == building.job));
 
+                    // check if the job of the building matches the job of a person on the bus
                     // remove person from the bus if dropped off
                     if self.on_bus.iter().any(|person| person.job == self.buildings[idx].job) {
-                        self.buildings.swap_remove(idx);
                         if let Some(person_idx) = self
                             .on_bus
                             .iter()
@@ -484,6 +485,7 @@ impl engine::Game for Game {
                             println!("number of people on bus: {}", self.on_bus.len());
                             self.score += 1;
                         }
+                        self.buildings.swap_remove(idx);
                     }
                     // println!("building job: {}", self.buildings[idx].job);
                 }
@@ -585,17 +587,6 @@ impl engine::Game for Game {
         }
     }
     fn render(&mut self, engine: &mut Engine) {
-        let score_str = self.score.to_string();
-        let text_len = score_str.len();
-
-        let sprite_count =
-            self.walls.len() + self.pavements.len() + self.animals.len() + self.people.len() + self.buildings.len() + 3;
-
-        engine.renderer.sprites.resize_sprite_group(
-            &engine.renderer.gpu,
-            0,
-            sprite_count + text_len,
-        );
 
         match self.game_state {
             GameState::TitleScreen => {
@@ -626,6 +617,19 @@ impl engine::Game for Game {
                     .set_camera_all(&engine.renderer.gpu, self.camera);
             }
             GameState::InGame => {
+                let score_str = self.score.to_string();
+                let text_len = score_str.len();
+
+                let sprite_count = 
+                    self.walls.len() + self.pavements.len() + self.animals.len() + self.people.len() + self.buildings.len() + self.on_bus.len() + 4;
+
+                engine.renderer.sprites.resize_sprite_group(
+                    &engine.renderer.gpu,
+                    0,
+                    sprite_count + text_len,
+                );
+
+
                 let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
 
                 // set bg image
@@ -641,16 +645,30 @@ impl engine::Game for Game {
 
                 // set walls
                 const WALL_START: usize = 1;
-                let bus_idx = WALL_START + self.walls.len();
+                let frame_start: usize = WALL_START + self.walls.len();
                 for (wall, (transform, uv)) in self.walls.iter().zip(
-                    transforms[WALL_START..bus_idx]
+                    transforms[WALL_START..frame_start]
                         .iter_mut()
-                        .zip(uvs[WALL_START..bus_idx].iter_mut()),
+                        .zip(uvs[WALL_START..frame_start].iter_mut()),
                 ) {
                     *transform = (*wall).into();
                     *uv = SheetRegion::new(0, 0, 480, 12, 8, 8);
                 }
+
+                // set sprite counter frame
+                transforms[frame_start] = SPRITE {
+                    center: Vec2 {
+                        x: W - 40.0,
+                        y: H - 144.0,
+                    },
+                    size: Vec2 { x: 60.0, y: 190.0 },
+                }
+                .into();
+                uvs[frame_start] = SheetRegion::new(0, 312, 501, 1, 40, 134);
+
+
                 // set bus
+                let bus_idx = frame_start + 1;
                 transforms[bus_idx] = SPRITE {
                     center: self.bus.pos,
                     size: Vec2 { x: 38.4, y: 65.33 },
@@ -830,7 +848,39 @@ impl engine::Game for Game {
                     }
                 }
 
-                let sprite_count = building_start + self.buildings.len();
+                let on_bus_start = building_start + self.buildings.len();
+                let bus_seats = vec![ H-100.0, H-180.0, H-260.0, H-340.0, H-420.0 ];
+                for (index, (person_on_bus, (transform, uv))) in self.on_bus.iter().zip(
+                    transforms[on_bus_start..]
+                        .iter_mut()
+                        .zip(uvs[on_bus_start..].iter_mut()),
+                ).enumerate() {
+                    *transform = SPRITE {
+                        center: Vec2{ x: W-40.0, y: bus_seats[index]},
+                        size: Vec2 { x: 38.4, y: 65.33 },
+                    }
+                    .into();
+                    match person_on_bus.job {
+                        Job::Firefighter => {
+                            *uv = SheetRegion::new(0, 134, 480, 0, 16, 19);
+                        }
+                        Job::Doctor => {
+                            *uv = SheetRegion::new(0, 212, 480, 0, 14, 18);
+                        }
+                        Job::Cop => {
+                            *uv = SheetRegion::new(0, 177, 480, 0, 14, 18);
+                        }
+                        Job::Regular => {
+                            *uv = SheetRegion::new(0, 100, 480, 0, 14, 18);
+                        }
+                        _ => {
+                            // for other cases, if they come up
+                        }
+                    }
+                }
+
+
+                let sprite_count = on_bus_start + self.on_bus.len();
 
                 self.font.draw_text(
                     &mut engine.renderer.sprites,
@@ -844,7 +894,7 @@ impl engine::Game for Game {
                     .into(),
                     16.0,
                 );
-                let text_start = building_start + self.buildings.len();
+                let text_start = on_bus_start + self.on_bus.len();
                 engine.renderer.sprites.resize_sprite_group(
                     &engine.renderer.gpu,
                     0,
