@@ -122,7 +122,7 @@ impl engine::Game for Game {
         let end_tex = engine.renderer.gpu.create_texture(&end_img, wgpu::TextureFormat::Rgba8UnormSrgb, end_img.dimensions(), Some("end-sprite.png"),);
         // #[cfg(target_arch = "wasm32")]
 
-        let sprite_img = image::open("../content/run-spritesheet.png")
+        let sprite_img = image::open("../content/run-spritesheet2.png")
             .unwrap()
             .into_rgba8();
         let sprite_tex = engine.renderer.gpu.create_texture(
@@ -701,26 +701,12 @@ impl engine::Game for Game {
                 let bus_idx = frame_start + 1;
                 transforms[bus_idx] = SPRITE {
                     center: self.bus.pos,
-                    size: Vec2 { x: 38.4, y: 65.33 },
+                    size: Vec2 { x: 60.0, y: 130.0 },
                 }
                 .into();
+                uvs[bus_idx] = SheetRegion::new(0, 8, 532, 1, 25, 42);
 
-                // animate the bus character
-                let ones_place = self.curr_frame % 10;
-                match ones_place {
-                    0 => {
-                        uvs[bus_idx] = SheetRegion::new(0, 100, 480, 1, 14, 18);
-                    }
-                    1 => {
-                        uvs[bus_idx] = SheetRegion::new(0, 100, 498, 1, 14, 18);
-                    }
-                    2 => {
-                        uvs[bus_idx] = SheetRegion::new(0, 114, 498, 1, 14, 18);
-                    }
-                    _ => {
-                        // for other cases, if they come up
-                    }
-                }
+                
 
         
 
