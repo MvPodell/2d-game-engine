@@ -287,15 +287,14 @@ impl engine::Game for Game {
                     if self.cop.is_visible && self.cop.fwd_jump_frames <= 100 {
                         self.cop.fwd_jump_frames += 1;
                     }
-
-                    if self.cop.fwd_jump_frames > 100 && self.cop.pos.y >= 0.0 {
-                        self.cop.pos.y -= 1.0;
-                    } else if self.cop.pos.y < 0.0 && self.cop.is_visible {
-                        // end cop visibility
-                        self.cop.fwd_jump_frames = 0;
-                        self.cop.is_visible = false;
-                        self.cop.pos.y = -50.0;
-                    }
+                }
+                if self.cop.fwd_jump_frames > 100 && self.cop.pos.y >= 0.0 {
+                    self.cop.pos.y -= 1.0;
+                } else if self.cop.pos.y < 0.0 && self.cop.is_visible {
+                    // end cop visibility
+                    self.cop.fwd_jump_frames = 0;
+                    self.cop.is_visible = false;
+                    self.cop.pos.y = -50.0;
                 }
 
                 // for continuous left or right movement
