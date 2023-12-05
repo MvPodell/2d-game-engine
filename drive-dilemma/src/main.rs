@@ -349,6 +349,7 @@ impl engine::Game for Game {
                 let uniform = Uniform::new(0, possible_values.len());
                 let random_index = rng.sample(uniform);
                 let random_value = possible_values[random_index];
+                let x_range_animals = (150.0, W - 150.0);
 
                 // create columns for buildings
                 let uniform_buildings = Uniform::new(0, side_values.len());
@@ -362,10 +363,14 @@ impl engine::Game for Game {
                     let mut valid_position = false;
                     let mut new_animal_pos = Vec2::default();
                     while !valid_position {
-                        let uniform = Uniform::new(0, possible_values.len());
-                        let random_index = rng.sample(uniform);
+                        // let uniform = Uniform::new(0, possible_values.len());
+                        // let random_index = rng.sample(uniform);
+                        // new_animal_pos = Vec2 {
+                        //     x: possible_values[random_index],
+                        //     y: H + 8.0,
+                        // };
                         new_animal_pos = Vec2 {
-                            x: possible_values[random_index],
+                            x: rand::thread_rng().gen_range(x_range_animals.0..x_range_animals.1),
                             y: H + 8.0,
                         };
 
@@ -399,6 +404,7 @@ impl engine::Game for Game {
                 // between frames, maintain all the animals on the screen that are above position -8.0
                 self.animals.retain(|animal| animal.pos.y > -8.0);
 
+                let x_range_people = (150.0, W - 150.0);
                 // spawn new people
                 if self.people_timer > 0 {
                     self.people_timer -= 1;
@@ -406,10 +412,10 @@ impl engine::Game for Game {
                     let mut valid_position = false;
                     let mut new_person_pos = Vec2::default();
                     while !valid_position {
-                        let uniform = Uniform::new(0, possible_values.len());
-                        let random_index = rng.sample(uniform);
+                        // let uniform = Uniform::new(0, possible_values.len());
+                        // let random_index = rng.sample(uniform);
                         new_person_pos = Vec2 {
-                            x: possible_values[random_index],
+                            x: rand::thread_rng().gen_range(x_range_people.0..x_range_people.1),
                             y: H + 8.0,
                         };
 
