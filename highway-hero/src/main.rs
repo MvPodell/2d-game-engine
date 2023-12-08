@@ -1,19 +1,14 @@
 use engine;
 use engine::wgpu;
-use engine::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
+use engine::{geom::*, sprites::*, Camera, Engine, SheetRegion, Transform, Zeroable};
 use rand::{distributions::Uniform, Rng};
 const W: f32 = 768.0;
 const H: f32 = 1280.0;
-// const GUY_SPEED: f32 = 4.0;
 const PAVEMENT_SPEED: f32 = -1.0;
 const SPRITE_MAX: usize = 1000;
 const COLLISION_DISTANCE: f32 = 22.0;
-// sound/audio
 use kira::{
-    manager::{
-        AudioManager, AudioManagerSettings,
-        backend::DefaultBackend,
-    },
+    manager::{backend::DefaultBackend, AudioManager, AudioManagerSettings},
     sound::static_sound::{StaticSoundData, StaticSoundSettings},
 };
 const COP_DISTANCE: f32 = 42.0;
@@ -27,15 +22,10 @@ struct Guy {
     is_visible: bool,
 }
 
-struct Sprite {
-    pos: Vec2,
-    vel: Vec2,
-}
-
 enum GameState {
     TitleScreen,
     InGame,
-    GameOver, 
+    GameOver,
 }
 
 struct Game {
@@ -50,7 +40,6 @@ struct Game {
     coins: Vec<Sprite>,
     coin_timer: u32,
     pavements: Vec<Sprite>,
-    pavement_timer: u32,
     score: u32,
     font: engine::BitFont,
     font_end: engine::BitFont,
@@ -73,10 +62,24 @@ impl engine::Game for Game {
         };
 
         #[cfg(not(target_arch = "wasm32"))]
-        let start_img = image::open("../content/title_screen2.png").unwrap().into_rgba8();
-        let start_tex = engine.renderer.gpu.create_texture(&start_img, wgpu::TextureFormat::Rgba8UnormSrgb, start_img.dimensions(), Some("start-sprite.png"),);
-        let end_img = image::open("../content/end_screen.png").unwrap().into_rgba8();
-        let end_tex = engine.renderer.gpu.create_texture(&end_img, wgpu::TextureFormat::Rgba8UnormSrgb, end_img.dimensions(), Some("end-sprite.png"),);
+        let start_img = image::open("../content/title_screen2.png")
+            .unwrap()
+            .into_rgba8();
+        let start_tex = engine.renderer.gpu.create_texture(
+            &start_img,
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            start_img.dimensions(),
+            Some("start-sprite.png"),
+        );
+        let end_img = image::open("../content/end_screen.png")
+            .unwrap()
+            .into_rgba8();
+        let end_tex = engine.renderer.gpu.create_texture(
+            &end_img,
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            end_img.dimensions(),
+            Some("end-sprite.png"),
+        );
 
         let sprite_img = image::open("../content/spritesheet.png")
             .unwrap()
@@ -182,9 +185,12 @@ impl engine::Game for Game {
 
         // coin sound
         // Create an audio manager
-        let audio_manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
+        let audio_manager =
+            AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
         // Load the coin sound
-        let coin_sound = StaticSoundData::from_file("../content/coin.mp3", StaticSoundSettings::default()).unwrap();
+        let coin_sound =
+            StaticSoundData::from_file("../content/coin.mp3", StaticSoundSettings::default())
+                .unwrap();
 
         Game {
             camera,
@@ -198,7 +204,6 @@ impl engine::Game for Game {
             car_speed_multiplier,
             coin_speed_multiplier,
             pavements,
-            pavement_timer: 0,
             score: 0,
             font,
             font_end,
@@ -229,7 +234,6 @@ impl engine::Game for Game {
             }
 
             GameState::InGame => {
-                let mut now = std::time::Instant::now();
                 // set the speed of animation for guy. Adjust number after modulo.
                 self.frame_counter = (self.frame_counter + 1) % 5;
                 if self.frame_counter == 0 {
@@ -248,7 +252,7 @@ impl engine::Game for Game {
                     .iter()
                     .position(|&r| (curr_col - r).abs() < 1.0);
 
-                let mut curr_index = position.map(|index| index as f32).unwrap_or_default();
+                let curr_index = position.map(|index| index as f32).unwrap_or_default();
 
                 // calculate x position of character
                 // for left or right movement in defined steps (possible_values)
@@ -297,8 +301,6 @@ impl engine::Game for Game {
                     self.cop.pos.y = -50.0;
                 }
 
-                // for continuous left or right movement
-                // let dir = engine.input.key_axis(engine::Key::Left, engine::Key::Right);
                 if -1.0 < curr_index as f32 + dir && curr_index as f32 + dir < 3.0 {
                     let curr_loc = curr_index + dir;
                     curr_col = possible_values[curr_loc as usize];
@@ -333,11 +335,6 @@ impl engine::Game for Game {
                             .unwrap()
                     });
                     for (wall_idx, _disp) in contacts.iter() {
-                        // TODO: for multiple guys should access self.guys[guy_idx].
-                        let guy_aabb = SPRITE {
-                            center: self.guy.pos,
-                            size: Vec2 { x: 38.4, y: 65.33 },
-                        };
                         let wall = self.walls[*wall_idx];
                         let mut disp = wall.displacement(guy_sprite).unwrap_or(Vec2::ZERO);
                         // We got to a basically zero collision amount
@@ -362,11 +359,6 @@ impl engine::Game for Game {
                     }
                 }
                 let mut rng = rand::thread_rng();
-
-                // create columns for cars/coins
-                let uniform = Uniform::new(0, possible_values.len());
-                let random_index = rng.sample(uniform);
-                let random_value = possible_values[random_index];
 
                 // spawn new cars
                 if self.car_timer > 0 {
@@ -397,17 +389,7 @@ impl engine::Game for Game {
                         pos: new_car_pos,
                         vel: Vec2 { x: 0.0, y: -2.0 },
                     });
-                    // self.cars.push(Car {
-                    //     pos: Vec2 {
-                    //         x: random_value,
-                    //         y: H + 8.0,
-                    //     },
-                    //     vel: Vec2 {
-                    //         x: 0.0,
-                    //         // y: rng.gen_range((-4.0)..(-1.0)),
-                    //         y: -2.0,
-                    //     },
-                    // });
+
                     self.car_timer = rng.gen_range(30..90);
                 }
                 // update car velocities every frame
@@ -416,7 +398,7 @@ impl engine::Game for Game {
                 }
                 // if any car is within the catch distance of the guy, mark a collision
                 if !self.guy.is_jumping {
-                    if let Some(idx) = self
+                    if let Some(_idx) = self
                         .cars
                         .iter()
                         .position(|car| car.pos.distance(self.guy.pos) <= COLLISION_DISTANCE)
@@ -424,7 +406,7 @@ impl engine::Game for Game {
                         println!("Score: {}", self.score);
                         engine.renderer.sprites.remove_sprite_group(0);
                         self.game_state = GameState::GameOver;
-                    } else if let Some(idx) = self
+                    } else if let Some(_idx) = self
                         .cars
                         .iter()
                         .position(|car| car.pos.distance(self.guy.pos) <= COP_DISTANCE)
@@ -452,8 +434,6 @@ impl engine::Game for Game {
                     self.coins.swap_remove(idx);
                     self.score += 1
                 }
-
-                // self.coins.retain(|coin| coin.pos.y > -8.0);
 
                 // Spawn new coins
                 if self.coin_timer > 0 {
@@ -483,17 +463,7 @@ impl engine::Game for Game {
                         pos: new_coin_pos,
                         vel: Vec2 { x: 0.0, y: -2.0 },
                     });
-                    // self.coins.push(Coin {
-                    //     pos: Vec2 {
-                    //         x: random_value,
-                    //         y: H + 8.0,
-                    //     },
-                    //     vel: Vec2 {
-                    //         x: 0.0,
-                    //         y: -2.0,
-                    //         // y: rng.gen_range((-4.0)..(-1.0)),
-                    //     },
-                    // });
+
                     self.coin_timer = rng.gen_range(30..90);
                 }
                 // Update coins
@@ -502,39 +472,7 @@ impl engine::Game for Game {
                 }
                 self.coins.retain(|coin| coin.pos.y > -8.0);
 
-                // Spawn new pavements
-                if self.pavement_timer > 0 {
-                    self.pavement_timer -= 1;
-                } else if self.pavements.len() < 33 {
-                    let newest_right_idx = self.pavements.len() - 2;
-                    let newest_left_idx = self.pavements.len() - 1;
-                    // create a right pavement
-                    self.pavements.push(Sprite {
-                        pos: Vec2 {
-                            x: W - 2.0,
-                            // add the next sprite one window height's length above the center of the most recently created sprite
-                            y: self.pavements[newest_right_idx].pos[1] + H,
-                        },
-                        vel: Vec2 {
-                            x: 0.0,
-                            y: PAVEMENT_SPEED,
-                        },
-                    });
-                    // create a left pavement
-                    self.pavements.push(Sprite {
-                        pos: Vec2 {
-                            x: 2.0,
-                            y: self.pavements[newest_left_idx].pos[1] + H,
-                        },
-                        vel: Vec2 { x: 0.0, y: -1.0 },
-                    });
-                    self.pavement_timer = rng.gen_range(30..90);
-                }
-                // Update pavements
-                for pavement in self.pavements.iter_mut() {
-                    pavement.pos += pavement.vel;
-                }
-                self.pavements.retain(|pavement| pavement.pos.y > -H / 2.0);
+                generate_scrolling_side(&mut self.pavements, PAVEMENT_SPEED, W, H);
 
                 // Increase speed multipliers over time
                 self.car_speed_multiplier += 0.001 * acc;
@@ -552,13 +490,17 @@ impl engine::Game for Game {
 
                 // coin sound
                 // Check if the guy collides with a coin
-                if let Some(idx) = self.coins.iter().position(|coin| coin.pos.distance(self.guy.pos) <= COLLISION_DISTANCE) {
+                if let Some(idx) = self
+                    .coins
+                    .iter()
+                    .position(|coin| coin.pos.distance(self.guy.pos) <= COLLISION_DISTANCE)
+                {
                     // Play the coin sound
                     self.audio_manager.play(self.coin_sound.clone()).unwrap();
 
                     // Remove the collected coin
                     self.coins.swap_remove(idx);
-                    
+
                     // Increase the score
                     self.score += 1;
                 }
@@ -569,41 +511,25 @@ impl engine::Game for Game {
         }
     }
     fn render(&mut self, engine: &mut Engine) {
-
         match self.game_state {
             GameState::TitleScreen => {
-                let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(1);
-                transforms[0] = SPRITE {
-                    center: Vec2 {
-                        x: W / 2.0,
-                        y: H / 2.0,
-                    },
-                    size: Vec2 { x: W, y: H-(H/4.0) },
-                }
-                .into();
-                uvs[0] = SheetRegion::new(0, 0, 0, 0, 768, 864); // Adjust UV coordinates if needed
-
-                engine.renderer.sprites.resize_sprite_group(
-                    &engine.renderer.gpu,
-                    1,
-                    1,
+                render_start_sprite(
+                    &mut engine.renderer.sprites,
+                    &mut engine.renderer.gpu,
+                    self.camera,
+                    W,
+                    H,
                 );
-                engine.renderer.sprites.upload_sprites(
-                    &engine.renderer.gpu,
-                    1,
-                    0..1,
-                );
-                engine
-                    .renderer
-                    .sprites
-                    .set_camera_all(&engine.renderer.gpu, self.camera);
             }
             GameState::InGame => {
                 let score_str = self.score.to_string();
                 let text_len = score_str.len();
 
-                let sprite_count =
-                    self.walls.len() + self.pavements.len() + self.cars.len() + self.coins.len() + 3;
+                let sprite_count = self.walls.len()
+                    + self.pavements.len()
+                    + self.cars.len()
+                    + self.coins.len()
+                    + 3;
 
                 engine.renderer.sprites.resize_sprite_group(
                     &engine.renderer.gpu,
@@ -613,7 +539,7 @@ impl engine::Game for Game {
 
                 let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
 
-                // set bg image
+                // set background image
                 transforms[0] = SPRITE {
                     center: Vec2 {
                         x: W / 2.0,
@@ -645,20 +571,9 @@ impl engine::Game for Game {
                 // animate the guy character
                 if !self.guy.is_jumping {
                     let ones_place = self.curr_frame % 10;
-                    match ones_place {
-                        0 => {
-                            uvs[guy_idx] = SheetRegion::new(0, 100, 498, 1, 14, 18);
-                        }
-                        1 => {
-                            uvs[guy_idx] = SheetRegion::new(0, 114, 480, 1, 14, 18);
-                        }
-                        2 => {
-                            uvs[guy_idx] = SheetRegion::new(0, 114, 498, 1, 14, 18);
-                        }
-                        _ => {
-                            // for other cases, if they come up
-                        }
-                    }
+                    let coords_guy = [100, 498, 114, 480, 114, 498];
+                    // let mut uv_guy = uvs[guy_idx];
+                    animate_char(&ones_place, &mut uvs[guy_idx], 0, coords_guy, 1, 14, 18);
                 }
 
                 // set cop
@@ -670,21 +585,9 @@ impl engine::Game for Game {
                 .into();
 
                 // animate the cop character
+                let coords_cop = [177, 498, 191, 480, 191, 498];
                 let ones_place = self.curr_frame % 10;
-                match ones_place {
-                    0 => {
-                        uvs[cop_idx] = SheetRegion::new(0, 177, 498, 0, 14, 18);
-                    }
-                    1 => {
-                        uvs[cop_idx] = SheetRegion::new(0, 191, 480, 0, 14, 18);
-                    }
-                    2 => {
-                        uvs[cop_idx] = SheetRegion::new(0, 191, 498, 0, 14, 18);
-                    }
-                    _ => {
-                        // for other cases, if they come up
-                    }
-                }
+                animate_char(&ones_place, &mut uvs[cop_idx], 0, coords_cop, 0, 14, 18);
 
                 // set pavement
                 let pavement_start = cop_idx + 1;
@@ -733,78 +636,20 @@ impl engine::Game for Game {
                 }
 
                 let sprite_count = coin_start + self.coins.len();
-
-                self.font.draw_text(
-                    &mut engine.renderer.sprites,
-                    0,
-                    sprite_count,
-                    &score_str,
-                    Vec2 {
-                        x: 16.0,
-                        y: H - 16.0,
-                    }
-                    .into(),
-                    16.0,
-                );
-                let text_start = coin_start + self.coins.len();
-                engine.renderer.sprites.resize_sprite_group(
-                    &engine.renderer.gpu,
-                    0,
-                    text_start + text_len,
-                );
-                engine.renderer.sprites.upload_sprites(
-                    &engine.renderer.gpu,
-                    0,
-                    0..sprite_count + text_len,
-                );
-                engine
-                    .renderer
-                    .sprites
-                    .set_camera_all(&engine.renderer.gpu, self.camera);
+                render_game_sprites(&self.font, self.camera, &mut engine.renderer.sprites, sprite_count, score_str, &mut engine.renderer.gpu, H);
             }
             GameState::GameOver => {
                 // the end screen sprite group is now at index 0 after removing the first two groups
-                let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
-                transforms[0] = SPRITE {
-                    center: Vec2 {
-                        x: W / 2.0,
-                        y: H / 2.0,
-                    },
-                    size: Vec2 { x: W, y: H-(H/4.0) },
-                }
-                .into();
-                uvs[0] = SheetRegion::new(0, 0, 0, 1, 768, 864); // Adjust UV coordinates if needed
-
-                let score_str = self.score.to_string();
-                let end_text_len = score_str.len();
-
-                self.font_end.draw_text(
+                render_end_sprite(
+                    &self.font_end,
                     &mut engine.renderer.sprites,
-                    0,
-                    1,
-                    &score_str,
-                    Vec2 {
-                        x: (W / 2.0) + 60.0,
-                        y: (H / 2.0) - 30.0,
-                    }
-                    .into(),
-                    40.0,
+                    &mut engine.renderer.gpu,
+                    self.score,
+                    self.camera,
+                    -30.0,
+                    W,
+                    H,
                 );
-
-                engine.renderer.sprites.resize_sprite_group(
-                    &engine.renderer.gpu,
-                    0,
-                    1 + end_text_len,
-                );
-                engine.renderer.sprites.upload_sprites(
-                    &engine.renderer.gpu,
-                    0,
-                    0..1 + end_text_len,
-                );
-                engine
-                    .renderer
-                    .sprites
-                    .set_camera_all(&engine.renderer.gpu, self.camera);
             }
         }
     }

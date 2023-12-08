@@ -1,16 +1,12 @@
 use engine;
 use engine::wgpu;
-use engine::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
-use rand::{distributions::Uniform, Rng};
-use std::fmt;
-// sound/audio --> use Kira
+use engine::{geom::*, sprites::*, Camera, Engine, SheetRegion, Transform, Zeroable};
 use kira::{
-    manager::{
-        AudioManager, AudioManagerSettings,
-        backend::DefaultBackend,
-    },
+    manager::{backend::DefaultBackend, AudioManager, AudioManagerSettings},
     sound::static_sound::{StaticSoundData, StaticSoundSettings},
 };
+use rand::{distributions::Uniform, Rng};
+use std::fmt;
 const W: f32 = 768.0;
 const H: f32 = 1280.0;
 const GUY_SPEED: f32 = 4.0;
@@ -18,24 +14,15 @@ const PAVEMENT_SPEED: f32 = -1.0;
 const SPRITE_MAX: usize = 1000;
 const COLLISION_DISTANCE: f32 = 22.0;
 const DROP_OFF_DIST: f32 = 75.0;
-const COP_DISTANCE: f32 = 42.0;
 const COLLISION_STEPS: usize = 3;
 const GUY_Y_POS: f32 = 24.0;
-struct Bus {
-    pos: Vec2,
-}
-
-struct Sprite {
-    pos: Vec2,
-    vel: Vec2,
-}
 
 #[derive(PartialEq, Debug, Clone)]
 enum Job {
     Doctor,
     Firefighter,
     Regular,
-    Cop
+    Cop,
 }
 
 enum CatDog {
@@ -57,13 +44,13 @@ impl fmt::Display for Job {
 struct Person {
     pos: Vec2,
     vel: Vec2,
-    job: Job
+    job: Job,
 }
 
 struct Building {
     pos: Vec2,
     vel: Vec2,
-    job: Job
+    job: Job,
 }
 
 struct Animal {
@@ -71,7 +58,6 @@ struct Animal {
     vel: Vec2,
     animal_type: CatDog,
 }
-
 
 enum GameState {
     TitleScreen,
@@ -82,7 +68,7 @@ enum GameState {
 struct Game {
     camera: engine::Camera,
     walls: Vec<SPRITE>,
-    bus: Bus,
+    bus: Sprite,
     animals: Vec<Animal>,
     people: Vec<Person>,
     animal_timer: u32,
@@ -92,7 +78,6 @@ struct Game {
     buildings: Vec<Building>,
     building_timer: u32,
     pavements: Vec<Sprite>,
-    pavement_timer: u32,
     score: u32,
     font: engine::BitFont,
     font_end: engine::BitFont,
@@ -105,7 +90,7 @@ struct Game {
     // sound
     audio_manager: AudioManager<DefaultBackend>,
     drop_sound: StaticSoundData,
-    cat_sound: StaticSoundData,
+    // cat_sound: StaticSoundData,
 }
 
 impl engine::Game for Game {
@@ -116,11 +101,24 @@ impl engine::Game for Game {
             screen_size: [W, H],
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let start_img = image::open("../content/title_screen_game2.png").unwrap().into_rgba8();
-        let start_tex = engine.renderer.gpu.create_texture(&start_img, wgpu::TextureFormat::Rgba8UnormSrgb, start_img.dimensions(), Some("start-sprite.png"),);
-        let end_img = image::open("../content/end_screen_game2.png").unwrap().into_rgba8();
-        let end_tex = engine.renderer.gpu.create_texture(&end_img, wgpu::TextureFormat::Rgba8UnormSrgb, end_img.dimensions(), Some("end-sprite.png"),);
-        // #[cfg(target_arch = "wasm32")]
+        let start_img = image::open("../content/title_screen_game2.png")
+            .unwrap()
+            .into_rgba8();
+        let start_tex = engine.renderer.gpu.create_texture(
+            &start_img,
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            start_img.dimensions(),
+            Some("start-sprite.png"),
+        );
+        let end_img = image::open("../content/end_screen_game2.png")
+            .unwrap()
+            .into_rgba8();
+        let end_tex = engine.renderer.gpu.create_texture(
+            &end_img,
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            end_img.dimensions(),
+            Some("end-sprite.png"),
+        );
 
         let sprite_img = image::open("../content/run-spritesheet.png")
             .unwrap()
@@ -140,7 +138,7 @@ impl engine::Game for Game {
             vec![SheetRegion::zeroed(); SPRITE_MAX],
             camera,
         );
-        
+
         // start sprite group
         engine.renderer.sprites.add_sprite_group(
             &engine.renderer.gpu,
@@ -159,11 +157,12 @@ impl engine::Game for Game {
             camera,
         );
 
-        let bus = Bus {
+        let bus = Sprite {
             pos: Vec2 {
                 x: 378.66,
                 y: GUY_Y_POS,
             },
+            vel: Vec2 { x: 0.0, y: 0.0 },
         };
 
         let floor = SPRITE {
@@ -213,11 +212,16 @@ impl engine::Game for Game {
 
         // drop sound
         // Create an audio manager
-        let audio_manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
+        let audio_manager =
+            AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
         // Load the drop sound
-        let drop_sound = StaticSoundData::from_file("../content/hotel-bell-ding.mp3", StaticSoundSettings::default()).unwrap();
+        let drop_sound = StaticSoundData::from_file(
+            "../content/hotel-bell-ding.mp3",
+            StaticSoundSettings::default(),
+        )
+        .unwrap();
         // Load the cat sound
-        let cat_sound = StaticSoundData::from_file("../content/angry_cat.mp3", StaticSoundSettings::default()).unwrap();
+        // let cat_sound = StaticSoundData::from_file("../content/angry_cat.mp3", StaticSoundSettings::default()).unwrap();
 
         Game {
             camera,
@@ -232,7 +236,6 @@ impl engine::Game for Game {
             animal_speed_multiplier,
             building_speed_multiplier,
             pavements,
-            pavement_timer: 0,
             score: 0,
             font,
             font_end,
@@ -240,10 +243,9 @@ impl engine::Game for Game {
             frame_counter: 0,
             frame_direction: 1,
             game_over: false,
-            // sound
             audio_manager,
             drop_sound,
-            cat_sound,
+            // cat_sound,
             game_state: GameState::TitleScreen,
             on_bus,
         }
@@ -265,7 +267,6 @@ impl engine::Game for Game {
             }
 
             GameState::InGame => {
-                let mut now = std::time::Instant::now();
                 // set the speed of animation for bus. Adjust number after modulo.
                 self.frame_counter = (self.frame_counter + 1) % 5;
                 if self.frame_counter == 0 {
@@ -278,8 +279,8 @@ impl engine::Game for Game {
                     }
                 }
                 // column values
-                let possible_values = [261.33, 378.66, 496.0];
-                let side_values = [100.0, W-100.0];
+                // let possible_values = [261.33, 378.66, 496.0];
+                let side_values = [100.0, W - 100.0];
 
                 // for continuous left or right movement
                 let dir = engine.input.key_axis(engine::Key::Left, engine::Key::Right);
@@ -290,12 +291,13 @@ impl engine::Game for Game {
                 self.bus.pos.y += dir * GUY_SPEED;
                 self.bus.pos.y += dir * GUY_SPEED;
 
+                // handle_collisions(self.walls, self.bus, COLLISION_STEPS);
                 let mut contacts = Vec::with_capacity(self.walls.len());
 
                 for _iter in 0..COLLISION_STEPS {
                     let bus_sprite = SPRITE {
                         center: self.bus.pos,
-                        size: Vec2 { x: 38.4, y: 65.33 },
+                        size: Vec2 { x: 38.4, y: 115.0 },
                     };
                     contacts.clear();
 
@@ -315,11 +317,6 @@ impl engine::Game for Game {
                             .unwrap()
                     });
                     for (wall_idx, _disp) in contacts.iter() {
-                        // TODO: for multiple buss should access self.buss[bus_idx].
-                        let bus_aabb = SPRITE {
-                            center: self.bus.pos,
-                            size: Vec2 { x: 38.4, y: 65.33 },
-                        };
                         let wall = self.walls[*wall_idx];
                         let mut disp = wall.displacement(bus_sprite).unwrap_or(Vec2::ZERO);
                         // We got to a basically zero collision amount
@@ -346,15 +343,7 @@ impl engine::Game for Game {
                 let mut rng = rand::thread_rng();
 
                 // create columns for animals
-                let uniform = Uniform::new(0, possible_values.len());
-                let random_index = rng.sample(uniform);
-                let random_value = possible_values[random_index];
                 let x_range_animals = (150.0, W - 150.0);
-
-                // create columns for buildings
-                let uniform_buildings = Uniform::new(0, side_values.len());
-                let random_index_buildings = rng.sample(uniform_buildings);
-                let random_value_buildings = side_values[random_index_buildings];
 
                 // spawn new animals
                 if self.animal_timer > 0 {
@@ -363,26 +352,17 @@ impl engine::Game for Game {
                     let mut valid_position = false;
                     let mut new_animal_pos = Vec2::default();
                     while !valid_position {
-                        // let uniform = Uniform::new(0, possible_values.len());
-                        // let random_index = rng.sample(uniform);
-                        // new_animal_pos = Vec2 {
-                        //     x: possible_values[random_index],
-                        //     y: H + 8.0,
-                        // };
                         new_animal_pos = Vec2 {
                             x: rand::thread_rng().gen_range(x_range_animals.0..x_range_animals.1),
                             y: H + 8.0,
                         };
 
                         // Check if the new position overlaps with existing animals
-                        valid_position = !self
-                            .animals
-                            .iter()
-                            .any(|animal| new_animal_pos.distance(animal.pos) <= COLLISION_DISTANCE)
-                            && !self
-                                .buildings
-                                .iter()
-                                .any(|building| new_animal_pos.distance(building.pos) <= COLLISION_DISTANCE);
+                        valid_position = !self.animals.iter().any(|animal| {
+                            new_animal_pos.distance(animal.pos) <= COLLISION_DISTANCE
+                        }) && !self.buildings.iter().any(|building| {
+                            new_animal_pos.distance(building.pos) <= COLLISION_DISTANCE
+                        });
                     }
                     let generated_animal = match rand::thread_rng().gen_range(0..1) {
                         0 => CatDog::Cat,
@@ -400,7 +380,7 @@ impl engine::Game for Game {
                 for animal in self.animals.iter_mut() {
                     animal.pos += animal.vel;
                 }
-                
+
                 // between frames, maintain all the animals on the screen that are above position -8.0
                 self.animals.retain(|animal| animal.pos.y > -8.0);
 
@@ -412,22 +392,17 @@ impl engine::Game for Game {
                     let mut valid_position = false;
                     let mut new_person_pos = Vec2::default();
                     while !valid_position {
-                        // let uniform = Uniform::new(0, possible_values.len());
-                        // let random_index = rng.sample(uniform);
                         new_person_pos = Vec2 {
                             x: rand::thread_rng().gen_range(x_range_people.0..x_range_people.1),
                             y: H + 8.0,
                         };
 
                         // Check if the new position overlaps with existing animals
-                        valid_position = !self
-                            .animals
-                            .iter()
-                            .any(|animal| new_person_pos.distance(animal.pos) <= COLLISION_DISTANCE)
-                            && !self
-                                .buildings
-                                .iter()
-                                .any(|building| new_person_pos.distance(building.pos) <= COLLISION_DISTANCE);
+                        valid_position = !self.animals.iter().any(|animal| {
+                            new_person_pos.distance(animal.pos) <= COLLISION_DISTANCE
+                        }) && !self.buildings.iter().any(|building| {
+                            new_person_pos.distance(building.pos) <= COLLISION_DISTANCE
+                        });
                     }
                     // TODO: generate a random job
                     let generated_job = match rand::thread_rng().gen_range(0..4) {
@@ -457,7 +432,7 @@ impl engine::Game for Game {
                     .any(|animal| animal.pos.distance(self.bus.pos) <= COLLISION_DISTANCE)
                 {
                     // play cat sound
-                    // self.audio_manager.play(self.cat_sound.clone()).unwrap(); 
+                    // self.audio_manager.play(self.cat_sound.clone()).unwrap();
                     println!("Game Over! Your final score: {}", self.score);
                     engine.renderer.sprites.remove_sprite_group(0);
                     self.game_state = GameState::GameOver;
@@ -466,13 +441,13 @@ impl engine::Game for Game {
                 // if any person is within the catch distance of the bus, mark a collision
                 if self.on_bus.len() < 5 {
                     if let Some(idx) = self
-                    .people
-                    .iter()
-                    .position(|person| person.pos.distance(self.bus.pos) <= COLLISION_DISTANCE)
+                        .people
+                        .iter()
+                        .position(|person| person.pos.distance(self.bus.pos) <= COLLISION_DISTANCE)
                     {
                         self.on_bus.push(Person {
-                            pos: Vec2 {x: 0.0, y: 0.0},
-                            vel: Vec2 {x: 0.0, y: 0.0},
+                            pos: Vec2 { x: 0.0, y: 0.0 },
+                            vel: Vec2 { x: 0.0, y: 0.0 },
                             job: self.people[idx].job.clone(),
                         });
                         println!("On Bus: {}", self.on_bus.len());
@@ -484,37 +459,31 @@ impl engine::Game for Game {
                 // between frames, maintain all the animals on the screen that are above position -8.0
                 self.animals.retain(|animal| animal.pos.y > -8.0);
 
-
-                // if a building is within the catch distance, 
-                if let Some(idx) = self
-                    .buildings
-                    .iter()
-                    .position(|building: &Building| building.pos.distance(self.bus.pos) <= DROP_OFF_DIST)
-                {
-                    let curr_building = &self.buildings[idx].job;
-
-                    // // Retain only the buildings that do not match the job of a person on the bus
-                    // self.buildings.retain(|building| !self.on_bus.iter().any(|person| person.job == building.job));
-
+                // if a building is within the catch distance,
+                if let Some(idx) = self.buildings.iter().position(|building: &Building| {
+                    building.pos.distance(self.bus.pos) <= DROP_OFF_DIST
+                }) {
                     // check if the job of the building matches the job of a person on the bus
                     // remove person from the bus if dropped off
-                    if self.on_bus.iter().any(|person| person.job == self.buildings[idx].job) {
+                    if self
+                        .on_bus
+                        .iter()
+                        .any(|person| person.job == self.buildings[idx].job)
+                    {
                         if let Some(person_idx) = self
                             .on_bus
                             .iter()
                             .position(|person| person.job == self.buildings[idx].job)
                         {
                             // play drop sound
-                            self.audio_manager.play(self.drop_sound.clone()).unwrap(); 
+                            self.audio_manager.play(self.drop_sound.clone()).unwrap();
                             println!("Removed a {} from the bus!", self.buildings[idx].job);
                             self.on_bus.swap_remove(person_idx);
                             println!("number of people on bus: {}", self.on_bus.len());
                             self.score += 1;
-
                         }
                         self.buildings.swap_remove(idx);
                     }
-                    // println!("building job: {}", self.buildings[idx].job);
                 }
 
                 self.buildings.retain(|building| building.pos.y > -8.0);
@@ -534,14 +503,11 @@ impl engine::Game for Game {
                         };
 
                         // Check if the new position overlaps with existing animals or buildings
-                        valid_position = !self
-                            .animals
-                            .iter()
-                            .any(|animal| new_building_pos.distance(animal.pos) <= COLLISION_DISTANCE)
-                            && !self
-                                .buildings
-                                .iter()
-                                .any(|building| new_building_pos.distance(building.pos) <= COLLISION_DISTANCE);
+                        valid_position = !self.animals.iter().any(|animal| {
+                            new_building_pos.distance(animal.pos) <= COLLISION_DISTANCE
+                        }) && !self.buildings.iter().any(|building| {
+                            new_building_pos.distance(building.pos) <= COLLISION_DISTANCE
+                        });
                     }
                     let generated_job = match rand::thread_rng().gen_range(0..4) {
                         0 => Job::Doctor,
@@ -563,39 +529,7 @@ impl engine::Game for Game {
                 }
                 self.buildings.retain(|building| building.pos.y > -8.0);
 
-                // Spawn new pavements
-                if self.pavement_timer > 0 {
-                    self.pavement_timer -= 1;
-                } else if self.pavements.len() < 33 {
-                    let newest_right_idx = self.pavements.len() - 2;
-                    let newest_left_idx = self.pavements.len() - 1;
-                    // create a right pavement
-                    self.pavements.push(Sprite {
-                        pos: Vec2 {
-                            x: W - 2.0,
-                            // add the next sprite one window height's length above the center of the most recently created sprite
-                            y: self.pavements[newest_right_idx].pos[1] + H,
-                        },
-                        vel: Vec2 {
-                            x: 0.0,
-                            y: PAVEMENT_SPEED,
-                        },
-                    });
-                    // create a left pavement
-                    self.pavements.push(Sprite {
-                        pos: Vec2 {
-                            x: 2.0,
-                            y: self.pavements[newest_left_idx].pos[1] + H,
-                        },
-                        vel: Vec2 { x: 0.0, y: -1.0 },
-                    });
-                    self.pavement_timer = rng.gen_range(30..90);
-                }
-                // Update pavements
-                for pavement in self.pavements.iter_mut() {
-                    pavement.pos += pavement.vel;
-                }
-                self.pavements.retain(|pavement| pavement.pos.y > -H / 2.0);
+                generate_scrolling_side(&mut self.pavements, PAVEMENT_SPEED, W, H);
 
                 // Increase speed multipliers over time
                 self.animal_speed_multiplier += 0.001 * acc;
@@ -617,41 +551,27 @@ impl engine::Game for Game {
         }
     }
     fn render(&mut self, engine: &mut Engine) {
-
         match self.game_state {
             GameState::TitleScreen => {
-                let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(1);
-                transforms[0] = SPRITE {
-                    center: Vec2 {
-                        x: W / 2.0,
-                        y: H / 2.0,
-                    },
-                    size: Vec2 { x: W, y: H-(H/4.0) },
-                }
-                .into();
-                uvs[0] = SheetRegion::new(0, 0, 0, 0, 768, 864); // Adjust UV coordinates if needed
-
-                engine.renderer.sprites.resize_sprite_group(
-                    &engine.renderer.gpu,
-                    1,
-                    1,
+                render_start_sprite(
+                    &mut engine.renderer.sprites,
+                    &mut engine.renderer.gpu,
+                    self.camera,
+                    W,
+                    H,
                 );
-                engine.renderer.sprites.upload_sprites(
-                    &engine.renderer.gpu,
-                    1,
-                    0..1,
-                );
-                engine
-                    .renderer
-                    .sprites
-                    .set_camera_all(&engine.renderer.gpu, self.camera);
             }
             GameState::InGame => {
                 let score_str = self.score.to_string();
                 let text_len = score_str.len();
 
-                let sprite_count = 
-                    self.walls.len() + self.pavements.len() + self.animals.len() + self.people.len() + self.buildings.len() + self.on_bus.len() + 4;
+                let sprite_count = self.walls.len()
+                    + self.pavements.len()
+                    + self.animals.len()
+                    + self.people.len()
+                    + self.buildings.len()
+                    + self.on_bus.len()
+                    + 4;
 
                 engine.renderer.sprites.resize_sprite_group(
                     &engine.renderer.gpu,
@@ -659,10 +579,9 @@ impl engine::Game for Game {
                     sprite_count + text_len,
                 );
 
-
                 let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
 
-                // set bg image
+                // set background image
                 transforms[0] = SPRITE {
                     center: Vec2 {
                         x: W / 2.0,
@@ -696,7 +615,6 @@ impl engine::Game for Game {
                 .into();
                 uvs[frame_start] = SheetRegion::new(0, 312, 501, 1, 40, 309);
 
-
                 // set bus
                 let bus_idx = frame_start + 1;
                 transforms[bus_idx] = SPRITE {
@@ -705,10 +623,6 @@ impl engine::Game for Game {
                 }
                 .into();
                 uvs[bus_idx] = SheetRegion::new(0, 7, 532, 1, 27, 42);
-
-                
-
-        
 
                 // set pavement
                 let pavement_start = bus_idx + 1;
@@ -745,9 +659,6 @@ impl engine::Game for Game {
                         CatDog::Dog => {
                             *uv = SheetRegion::new(0, 146, 565, 3, 25, 27);
                         }
-                        _ => {
-                            // other cases
-                        }
                     }
                 }
 
@@ -767,68 +678,20 @@ impl engine::Game for Game {
                     let ones_place = self.curr_frame % 10;
                     match person.job {
                         Job::Firefighter => {
-                            match ones_place {
-                                0 => {
-                                    *uv = SheetRegion::new(0, 134, 480, 0, 16, 19);
-                                }
-                                1 => {
-                                    *uv = SheetRegion::new(0, 134, 499, 0, 16, 19);
-                                }
-                                2 => {
-                                    *uv = SheetRegion::new(0, 150, 498, 0, 16, 19);
-                                }
-                                _ => {
-                                    // for other cases, if they come up
-                                }
-                            }
+                            let coords_firefighter = [134, 480, 134, 499, 150, 498];
+                            animate_char(&ones_place, uv, 0, coords_firefighter, 0, 16, 19);
                         }
                         Job::Doctor => {
-                            match ones_place {
-                                0 => {
-                                    *uv = SheetRegion::new(0, 212, 480, 0, 14, 17);
-                                }
-                                1 => {
-                                    *uv = SheetRegion::new(0, 212, 497, 0, 14, 17);
-                                }
-                                2 => {
-                                    *uv = SheetRegion::new(0, 226, 497, 0, 14, 17);
-                                }
-                                _ => {
-                                    // for other cases, if they come up
-                                }
-                            }
+                            let coords_doctor = [212, 480, 212, 497, 226, 497];
+                            animate_char(&ones_place, uv, 0, coords_doctor, 0, 14, 17);
                         }
                         Job::Cop => {
-                            match ones_place {
-                                0 => {
-                                    *uv = SheetRegion::new(0, 177, 480, 0, 14, 18);
-                                }
-                                1 => {
-                                    *uv = SheetRegion::new(0, 191, 498, 0, 14, 18);
-                                }
-                                2 => {
-                                    *uv = SheetRegion::new(0, 177, 498, 0, 14, 18);
-                                }
-                                _ => {
-                                    // for other cases, if they come up
-                                }
-                            }   
+                            let coords_cop = [177, 480, 191, 498, 177, 498];
+                            animate_char(&ones_place, uv, 0, coords_cop, 0, 14, 18);
                         }
                         Job::Regular => {
-                            match ones_place {
-                                0 => {
-                                    *uv = SheetRegion::new(0, 100, 480, 1, 14, 18);
-                                }
-                                1 => {
-                                    *uv = SheetRegion::new(0, 100, 498, 1, 14, 18);
-                                }
-                                2 => {
-                                    *uv = SheetRegion::new(0, 114, 498, 1, 14, 18);
-                                }
-                                _ => {
-                                    // for other cases, if they come up
-                                }
-                            }
+                            let coords_reg = [100, 480, 100, 498, 114, 498];
+                            animate_char(&ones_place, uv, 0, coords_reg, 0, 14, 18);
                         }
                     }
                 }
@@ -858,21 +721,26 @@ impl engine::Game for Game {
                         Job::Regular => {
                             *uv = SheetRegion::new(0, 97, 528, 1, 32, 33);
                         }
-                        _ => {
-                            // for other cases, if they come up
-                        }
                     }
                 }
 
                 let on_bus_start = building_start + self.buildings.len();
-                let bus_seats = vec![ H-120.0, H-210.0, H-300.0, H-390.0, H-480.0 ];
-                for (index, (person_on_bus, (transform, uv))) in self.on_bus.iter().zip(
-                    transforms[on_bus_start..]
-                        .iter_mut()
-                        .zip(uvs[on_bus_start..].iter_mut()),
-                ).enumerate() {
+                let bus_seats = vec![H - 120.0, H - 210.0, H - 300.0, H - 390.0, H - 480.0];
+                for (index, (person_on_bus, (transform, uv))) in self
+                    .on_bus
+                    .iter()
+                    .zip(
+                        transforms[on_bus_start..]
+                            .iter_mut()
+                            .zip(uvs[on_bus_start..].iter_mut()),
+                    )
+                    .enumerate()
+                {
                     *transform = SPRITE {
-                        center: Vec2{ x: W-40.0, y: bus_seats[index]},
+                        center: Vec2 {
+                            x: W - 40.0,
+                            y: bus_seats[index],
+                        },
                         size: Vec2 { x: 38.4, y: 65.33 },
                     }
                     .into();
@@ -889,88 +757,25 @@ impl engine::Game for Game {
                         Job::Regular => {
                             *uv = SheetRegion::new(0, 100, 480, 0, 14, 18);
                         }
-                        _ => {
-                            // for other cases, if they come up
-                        }
                     }
                 }
 
-
                 let sprite_count = on_bus_start + self.on_bus.len();
-
-                self.font.draw_text(
-                    &mut engine.renderer.sprites,
-                    0,
-                    sprite_count,
-                    &score_str,
-                    Vec2 {
-                        x: 16.0,
-                        y: H - 16.0,
-                    }
-                    .into(),
-                    16.0,
-                );
-                let text_start = on_bus_start + self.on_bus.len();
-                engine.renderer.sprites.resize_sprite_group(
-                    &engine.renderer.gpu,
-                    0,
-                    text_start + text_len,
-                );
-                engine.renderer.sprites.upload_sprites(
-                    &engine.renderer.gpu,
-                    0,
-                    0..sprite_count + text_len,
-                );
-                engine
-                    .renderer
-                    .sprites
-                    .set_camera_all(&engine.renderer.gpu, self.camera);
+                render_game_sprites(&self.font, self.camera, &mut engine.renderer.sprites, sprite_count, score_str, &mut engine.renderer.gpu, H);
             }
             GameState::GameOver => {
                 // the end screen sprite group is now at index 0 after removing the first two groups
-                // self.audio_manager.play(self.cat_sound.clone()).unwrap(); 
-
-                let (transforms, uvs) = engine.renderer.sprites.get_sprites_mut(0);
-                transforms[0] = SPRITE {
-                    center: Vec2 {
-                        x: W / 2.0,
-                        y: H / 2.0,
-                    },
-                    size: Vec2 { x: W, y: H-(H/4.0) },
-                }
-                .into();
-                uvs[0] = SheetRegion::new(0, 0, 0, 1, 768, 864); // Adjust UV coordinates if needed
-
-                let score_str = self.score.to_string();
-                let end_text_len = score_str.len();
-
-                self.font_end.draw_text(
+                // self.audio_manager.play(self.cat_sound.clone()).unwrap();
+                render_end_sprite(
+                    &self.font_end,
                     &mut engine.renderer.sprites,
-                    0,
-                    1,
-                    &score_str,
-                    Vec2 {
-                        x: (W / 2.0) + 60.0,
-                        y: (H / 2.0) + 50.0,
-                    }
-                    .into(),
-                    40.0,
+                    &mut engine.renderer.gpu,
+                    self.score,
+                    self.camera,
+                    50.0,
+                    W,
+                    H,
                 );
-
-                engine.renderer.sprites.resize_sprite_group(
-                    &engine.renderer.gpu,
-                    0,
-                    1 + end_text_len,
-                );
-                engine.renderer.sprites.upload_sprites(
-                    &engine.renderer.gpu,
-                    0,
-                    0..1 + end_text_len,
-                );
-                engine
-                    .renderer
-                    .sprites
-                    .set_camera_all(&engine.renderer.gpu, self.camera);
             }
         }
     }
